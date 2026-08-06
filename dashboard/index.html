@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Service — Staff Dashboard</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --ink: #1b1d21; --muted: #6b7280;
+    --line: #e3e5ea; --accent: #2563eb;
+    --low: #6b7280; --medium: #2563eb; --high: #d97706; --critical: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15171b; --card:#1e2126; --ink:#e8eaed; --muted:#9aa2ae; --line:#2c3037; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  header { display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+           padding:16px 24px; background:var(--card); border-bottom:1px solid var(--line); }
+  h1 { font-size:17px; margin:0; font-weight:650; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#22c55e; }
+  .dot.stale { background:#dc2626; }
+  main { padding:24px; max-width:1200px; margin:0 auto; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+           gap:12px; margin-bottom:20px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .stat b { display:block; font-size:24px; font-weight:650; }
+  .stat span { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  button, select, input { font:inherit; padding:7px 12px; border-radius:8px;
+           border:1px solid var(--line); background:var(--card); color:var(--ink); }
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  input.grow { flex:1; min-width:220px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:16px; margin-bottom:12px; }
+  .card.flagged { border-color:var(--critical); border-left-width:4px; }
+  .row { display:flex; justify-content:space-between; align-items:flex-start; gap:16px;
+         flex-wrap:wrap; }
+  .rid { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; }
+  .transcript { font-size:16px; margin:8px 0; }
+  .meta { color:var(--muted); font-size:13px; display:flex; gap:14px; flex-wrap:wrap; }
+  .tag { display:inline-block; padding:2px 9px; border-radius:20px; font-size:12px;
+         font-weight:600; border:1px solid currentColor; }
+  .p-low{color:var(--low)} .p-medium{color:var(--medium)}
+  .p-high{color:var(--high)} .p-critical{color:var(--critical)}
+  .conf { display:inline-flex; align-items:center; gap:6px; }
+  .conf i { display:block; width:44px; height:5px; border-radius:3px; background:var(--line); }
+  .conf i b { display:block; height:100%; border-radius:3px; background:var(--accent); }
+  .empty { color:var(--muted); text-align:center; padding:48px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Smart Service — Staff Dashboard</h1>
+  <span class="dot" id="dot"></span>
+  <span class="meta" id="conn">connecting…</span>
+  <span style="flex:1"></span>
+  <input id="api" size="34" title="Backend base URL">
+  <button onclick="setApi()">Connect</button>
+</header>
+
+<main>
+  <div class="stats" id="stats"></div>
+
+  <div class="bar">
+    <select id="filter" onchange="render()">
+      <option value="">All statuses</option>
+      <option value="open">Open</option>
+      <option value="acknowledged">Acknowledged</option>
+      <option value="escalated">Escalated</option>
+      <option value="completed">Completed</option>
+    </select>
+    <input class="grow" id="sim" placeholder="Simulate a request (demo backup path)…"
+           onkeydown="if(event.key==='Enter')simulate()">
+    <button class="primary" onclick="simulate()">Create</button>
+    <button onclick="refresh()">Refresh</button>
+  </div>
+
+  <div id="list"></div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;font-size:14px">Reporting</h3>
+    <table id="report"></table>
+  </div>
+</main>
+
+<script>
+// Point at the mock server, the local Functions host, or the deployed Function App.
+let API = localStorage.getItem("api") || "http://localhost:7071/api";
+let items = [], summary = {};
+
+document.getElementById("api").value = API;
+function setApi() {
+  API = document.getElementById("api").value.replace(/\/$/, "");
+  localStorage.setItem("api", API);
+  refresh();
+}
+
+async function refresh() {
+  try {
+    const [r, s] = await Promise.all([
+      fetch(API + "/requests").then(r => r.json()),
+      fetch(API + "/reports/summary").then(r => r.json()).catch(() => ({})),
+    ]);
+    items = r.items || [];
+    summary = s || {};
+    setConn(true);
+  } catch (e) {
+    setConn(false, e.message);
+  }
+  render();
+}
+
+function setConn(ok, msg) {
+  document.getElementById("dot").className = "dot" + (ok ? "" : " stale");
+  document.getElementById("conn").textContent = ok
+    ? "live · " + new Date().toLocaleTimeString()
+    : "backend unreachable — is it running? " + (msg || "");
+}
+
+async function act(id, what) {
+  await fetch(`${API}/requests/${id}/${what}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  });
+  refresh();
+}
+
+async function simulate() {
+  const el = document.getElementById("sim");
+  if (!el.value.trim()) return;
+  await fetch(API + "/requests/simulate", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transcript: el.value.trim() }),
+  });
+  el.value = "";
+  refresh();
+}
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function render() {
+  const filter = document.getElementById("filter").value;
+  const shown = filter ? items.filter(r => r.status === filter) : items;
+
+  const count = s => items.filter(r => r.status === s).length;
+  document.getElementById("stats").innerHTML = [
+    ["Open", count("open")],
+    ["Acknowledged", count("acknowledged")],
+    ["Escalated", count("escalated")],
+    ["Completed", count("completed")],
+    ["Safety flagged", items.filter(r => r.safety_flag).length],
+    ["Mean resolution",
+      summary.mean_resolution_time_s != null ? summary.mean_resolution_time_s + "s" : "—"],
+  ].map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
+
+  document.getElementById("list").innerHTML = shown.length ? shown.map(r => {
+    const pct = Math.round((r.confidence ?? 0) * 100);
+    return `<div class="card${r.safety_flag ? " flagged" : ""}">
+      <div class="row">
+        <div style="flex:1;min-width:260px">
+          <span class="rid">${esc(r.request_id)}</span>
+          <span class="tag p-${esc(r.priority)}">${esc(r.priority)}</span>
+          ${r.safety_flag ? `<span class="tag p-critical">SAFETY · ${esc(r.flag_source)}</span>` : ""}
+          <!-- Transparency: show the transcript and the agent's own confidence,
+               not just the decision it reached. -->
+          <div class="transcript">“${esc(r.transcript)}”</div>
+          <div class="meta">
+            <span>${esc(r.location)}</span>
+            <span>${esc(r.category)} → ${esc(r.assigned_team)}</span>
+            <span class="conf">conf ${pct}%
+              <i><b style="width:${pct}%"></b></i></span>
+            <span>${esc(r.classifier || "rules")}</span>
+            <span>${esc(r.created_at)}</span>
+            ${r.acknowledged_by ? `<span>ack by ${esc(r.acknowledged_by)}</span>` : ""}
+            ${r.resolution_time_s != null ? `<span>resolved in ${r.resolution_time_s}s</span>` : ""}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          ${["open", "escalated"].includes(r.status)
+            ? `<button onclick="act('${r.request_id}','ack')">Acknowledge</button>` : ""}
+          ${r.status !== "completed"
+            ? `<button class="primary" onclick="act('${r.request_id}','complete')">Complete</button>` : ""}
+          ${r.status === "completed" ? `<span class="meta">completed</span>` : ""}
+        </div>
+      </div>
+    </div>`;
+  }).join("") : `<div class="empty">No requests yet. Speak to a panel, or use the box above.</div>`;
+
+  const by = summary.by_team || {};
+  document.getElementById("report").innerHTML =
+    "<tr><th>Team</th><th>Requests</th></tr>" +
+    (Object.keys(by).length
+      ? Object.entries(by).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")
+      : "<tr><td colspan=2 class='meta'>no data</td></tr>");
+}
+
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>

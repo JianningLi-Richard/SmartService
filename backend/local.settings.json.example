@@ -1,0 +1,30 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+
+    "_comment": "Leave the Azure values empty to run fully on local fallbacks: in-memory store, rule-based classifier, no TTS. Fill them in as the deployment lead provisions each resource. NEVER commit the real local.settings.json.",
+
+    "AZURE_STORAGE_CONNECTION_STRING": "",
+    "TABLE_REQUESTS": "requests",
+    "TABLE_SESSIONS": "sessions",
+
+    "AI_FOUNDRY_ENDPOINT": "",
+    "AI_FOUNDRY_AGENT_ID": "",
+    "AGENT_TIMEOUT_MS": "6000",
+
+    "SPEECH_KEY": "",
+    "SPEECH_REGION": "",
+    "SPEECH_VOICE": "en-CA-ClaraNeural",
+    "SPEECH_TIMEOUT_MS": "2500",
+
+    "DEVICE_KEYS": "",
+    "SESSION_TTL_SECONDS": "60",
+    "STT_CONFIDENCE_THRESHOLD": "0.55",
+    "MAX_CLARIFICATION_TURNS": "2",
+    "ESCALATION_MINUTES": "10",
+
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": ""
+  }
+}

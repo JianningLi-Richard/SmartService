@@ -1,0 +1,6 @@
+azure-functions
+azure-data-tables
+requests
+# Added when the Foundry agent is wired (Aug 9-11):
+# azure-ai-projects
+# azure-identity

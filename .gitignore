@@ -1,0 +1,21 @@
+# Secrets -- never commit. Real values live in Azure App Settings / Key Vault.
+backend/local.settings.json
+*.env
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Azure Functions
+backend/bin/
+backend/obj/
+.python_packages/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
