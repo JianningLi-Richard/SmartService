@@ -46,6 +46,17 @@ az role assignment create \
   --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP" \
   --output none
 
+# main.bicep grants the Function App's identity Key Vault access via a role
+# assignment; Contributor deliberately excludes Microsoft.Authorization/*, so
+# the deploying identity also needs this to create that role assignment.
+echo "Granting User Access Administrator on $RESOURCE_GROUP (needed to create the Function App's Key Vault role assignment)..."
+az role assignment create \
+  --assignee-object-id "$PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "User Access Administrator" \
+  --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP" \
+  --output none
+
 # GitHub now embeds immutable owner/repo IDs in the OIDC subject claim
 # (repo:org@ownerId/repo@repoId:...), not just "repo:org/repo:...". Build the
 # subject from the API so the federated credential actually matches the token.
