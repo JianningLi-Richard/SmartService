@@ -46,9 +46,18 @@ az role assignment create \
   --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP" \
   --output none
 
+# GitHub now embeds immutable owner/repo IDs in the OIDC subject claim
+# (repo:org@ownerId/repo@repoId:...), not just "repo:org/repo:...". Build the
+# subject from the API so the federated credential actually matches the token.
+OWNER="${REPO%%/*}"
+REPO_NAME="${REPO##*/}"
+OWNER_ID="$(gh api "repos/${REPO}" --jq '.owner.id')"
+REPO_ID="$(gh api "repos/${REPO}" --jq '.id')"
+QUALIFIED_REPO="${OWNER}@${OWNER_ID}/${REPO_NAME}@${REPO_ID}"
+
 # Plain arrays instead of associative arrays — macOS ships bash 3.2, no declare -A.
 CRED_NAMES=(github-main github-pull-request)
-CRED_SUBJECTS=("repo:${REPO}:ref:refs/heads/main" "repo:${REPO}:pull_request")
+CRED_SUBJECTS=("repo:${QUALIFIED_REPO}:ref:refs/heads/main" "repo:${QUALIFIED_REPO}:pull_request")
 for i in "${!CRED_NAMES[@]}"; do
   NAME="${CRED_NAMES[$i]}"
   SUBJECT="${CRED_SUBJECTS[$i]}"
