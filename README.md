@@ -17,6 +17,7 @@ backend/     Azure Functions app (Python) — the real backend
 mock/        Zero-dependency stub of the same contract — for firmware/dashboard development
 dashboard/   Single-file staff dashboard
 docs/        API contract
+infra/       Bicep + GitHub Actions — Azure provisioning and CI/CD
 ```
 
 ---
@@ -129,6 +130,9 @@ acoustics fail. Build and test it early.
 ---
 
 ## For the deployment lead
+
+**Start here: [infra/README.md](infra/README.md).** Bicep + GitHub Actions provision
+everything below except the AI Foundry agent.
 
 The backend reads configuration from environment variables only; nothing is in code and
 nothing is in this repo. The full list is in
