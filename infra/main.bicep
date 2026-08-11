@@ -291,13 +291,14 @@ resource kvSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' 
   }
 }
 
-// Lets the Function App call the Foundry Agent Service using its managed identity
-// (DefaultAzureCredential) instead of an API key.
-resource aiFoundryDeveloperRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(aiFoundry.id, functionApp.id, 'Azure AI Developer')
-  scope: aiFoundry
+// Lets the Function App call the Foundry Agent Service using its managed identity.
+// Foundry User includes the AIServices/agents data actions required by the v1
+// threads/runs API. Azure AI Developer does not grant those Foundry permissions.
+resource aiFoundryUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(aiFoundryProject.id, functionApp.id, 'Foundry User')
+  scope: aiFoundryProject
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '64702f94-c441-49e6-a78b-ef80e0188fee')
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')
     principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
