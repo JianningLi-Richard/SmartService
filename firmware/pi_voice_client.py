@@ -30,19 +30,24 @@ PIPER_MODEL = "models/piper/en_US-lessac-medium.onnx"
 PIPER_VOLUME = "1.5"
 
 DEVICE_ID = os.getenv("DEVICE_ID", "pi-3f-01")
-DEVICE_LOCATION = os.getenv("DEVICE_LOCATION", "3F-Washroom")
+DEVICE_LOCATION = os.getenv("DEVICE_LOCATION", "")
 DEVICE_KEY = os.getenv("DEVICE_KEY", "")
 
 SAMPLE_RATE = 16000
 
 DEMO_PHRASES = [
-    "the printer on floor two is jammed",
+    "hi there",
+    "hello",
+    "i need help",
     "it's dirty in here",
+    "the washroom needs cleaning",
+    "the printer on floor two is jammed",
+    "second floor office",
     "third floor washroom",
     "what happened to my request",
     "someone fell down the stairs",
     "unlock the server room door",
-    "[unk]"
+    "[unk]",
 ]
 
 CANONICAL_DEMO_PHRASES = [
@@ -250,7 +255,6 @@ def transcribe_audio():
     recognizer = KaldiRecognizer(
         vosk_model,
         SAMPLE_RATE,
-        json.dumps(DEMO_PHRASES)
     )
 
     recognizer.SetWords(True)
@@ -445,10 +449,11 @@ def speak_local(text):
 
         subprocess.run(
             [
-                "pw-play",
+                "aplay",
+                "-q",
                 loud_audio_path
             ],
-            check=False
+            check=True
         )
 
     except FileNotFoundError as error:
