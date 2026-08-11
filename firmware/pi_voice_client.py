@@ -255,6 +255,7 @@ def transcribe_audio():
     recognizer = KaldiRecognizer(
         vosk_model,
         SAMPLE_RATE,
+        #json.dumps(DEMO_PHRASES)
     )
 
     recognizer.SetWords(True)
