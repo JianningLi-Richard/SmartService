@@ -124,17 +124,15 @@ function setConn(ok, msg) {
 }
 
 async function act(id, what) {
-  await fetch(`${API}/requests/${id}/${what}`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
-  });
-  refresh();
+  await fetch(`${API}/requests/${id}/${what}`, { method: "POST" });
+  await refresh();
 }
 
 async function simulate() {
   const el = document.getElementById("sim");
   if (!el.value.trim()) return;
   await fetch(API + "/requests/simulate", {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST",
     body: JSON.stringify({ transcript: el.value.trim() }),
   });
   el.value = "";
