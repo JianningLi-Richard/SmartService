@@ -29,8 +29,10 @@ PIPER_PATH = "tools/piper/piper"
 PIPER_MODEL = "models/piper/en_US-lessac-medium.onnx"
 PIPER_VOLUME = "1.5"
 
-DEVICE_ID = "pi-3f-01"
-DEVICE_LOCATION = "3F-Washroom"
+DEVICE_ID = os.getenv("DEVICE_ID", "pi-3f-01")
+DEVICE_LOCATION = os.getenv("DEVICE_LOCATION", "3F-Washroom")
+DEVICE_KEY = os.getenv("DEVICE_KEY", "")
+
 SAMPLE_RATE = 16000
 
 DEMO_PHRASES = [
@@ -493,9 +495,9 @@ def send_request(transcript, confidence, session_id, turn):
         response = requests.post(
             API_URL,
             json=payload,
+            headers={"X-Device-Key": DEVICE_KEY},
             timeout=8
         )
-
         response.raise_for_status()
         result = response.json()
 
