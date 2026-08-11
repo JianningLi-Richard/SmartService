@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shared import store, workflow  # noqa: E402
+from shared import agent, store, workflow  # noqa: E402
 
 
 def ts(sec=0):
@@ -199,7 +199,65 @@ class DashboardTests(unittest.TestCase):
                                          {"created_at": "2026-08-06T00:00:00Z"})
         escalated = workflow.escalation_sweep()
         self.assertIn(rec["request_id"], escalated)
+#test agent
+class AgentValidationTests(unittest.TestCase):
+    @staticmethod
+    def valid_output():
+        return {
+            "intent": "new_request",
+            "state": "complete",
+            "listen_again": False,
+            "speech_reply": "The printer issue has been routed to IT.",
+            "request": {
+                "category": "it_support",
+                "location": "2F-Office",
+                "priority": "medium",
+                "assigned_team": "it",
+                "confidence": 0.95,
+                "safety_flag": False,
+                "missing_fields": [],
+            },
+            "device_actions": [],
+        }
 
+    def test_valid_agent_output_is_accepted(self):
+        output = self.valid_output()
+        self.assertIs(agent._validate_agent_output(output), output)
+
+    def test_noncanonical_agent_location_is_rejected(self):
+        output = self.valid_output()
+        output["request"]["location"] = "2F"
+        with self.assertRaises(ValueError):
+            agent._validate_agent_output(output)
+
+    def test_invalid_agent_team_is_rejected(self):
+        output = self.valid_output()
+        output["request"]["assigned_team"] = "custodial"
+        with self.assertRaises(ValueError):
+            agent._validate_agent_output(output)
+
+    def test_invalid_agent_priority_is_rejected(self):
+        output = self.valid_output()
+        output["request"]["priority"] = "critical"
+        with self.assertRaises(ValueError):
+            agent._validate_agent_output(output)
+
+    def test_agent_physical_action_is_rejected(self):
+        output = self.valid_output()
+        output["device_actions"] = [
+            {
+                "actuator": "door_lock",
+                "action": "open",
+            }
+        ]
+        with self.assertRaises(ValueError):
+            agent._validate_agent_output(output)
+
+    def test_agent_confidence_out_of_range_is_rejected(self):
+        output = self.valid_output()
+        output["request"]["confidence"] = 1.5
+        with self.assertRaises(ValueError):
+            agent._validate_agent_output(output)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

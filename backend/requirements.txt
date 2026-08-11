@@ -1,6 +1,7 @@
 azure-functions
 azure-data-tables
 requests
-# Added when the Foundry agent is wired (Aug 9-11):
-# azure-ai-projects
-# azure-identity
+# Foundry Agent Service and structured-output validation
+azure-ai-agents==1.1.0
+azure-identity==1.25.3
+jsonschema==4.26.0
