@@ -1,0 +1,55 @@
+[1mdiff --git a/backend/shared/workflow.py b/backend/shared/workflow.py[m
+[1mindex 6f302b0..3a13c2c 100644[m
+[1m--- a/backend/shared/workflow.py[m
+[1m+++ b/backend/shared/workflow.py[m
+[36m@@ -25,7 +25,7 @@[m [mfrom .store import get_store, iso, now, parse_iso[m
+ [m
+ log = logging.getLogger(__name__)[m
+ [m
+[31m-REQUIRED_FIELDS = ("session_id", "device_id", "location", "transcript", "timestamp")[m
+[32m+[m[32mREQUIRED_FIELDS = ("session_id", "device_id","transcript", "timestamp")[m
+ [m
+ [m
+ class PayloadError(Exception):[m
+[36m@@ -59,7 +59,7 @@[m [mdef validate_payload(body):[m
+         "session_id": str(body["session_id"]).strip(),[m
+         "turn": turn,[m
+         "device_id": str(body["device_id"]).strip(),[m
+[31m-        "location": str(body["location"]).strip(),[m
+[32m+[m[32m        "location": str(body.get("location") or "").strip(),[m
+         "transcript": str(body["transcript"]).strip(),[m
+         "stt_confidence": conf,[m
+         "timestamp": str(body["timestamp"]).strip(),[m
+[1mdiff --git a/backend/tests/test_workflow.py b/backend/tests/test_workflow.py[m
+[1mindex c1df682..3e1b4ec 100644[m
+[1m--- a/backend/tests/test_workflow.py[m
+[1m+++ b/backend/tests/test_workflow.py[m
+[36m@@ -165,13 +165,27 @@[m [mclass ContractTests(unittest.TestCase):[m
+         self.assertEqual(len(clean[1]["text"]), 32)        # truncated[m
+ [m
+     def test_missing_fields_rejected(self):[m
+[31m-        for missing in ("session_id", "device_id", "location", "transcript", "timestamp"):[m
+[32m+[m[32m        for missing in ("session_id", "device_id","transcript", "timestamp"):[m
+             payload = {"session_id": "s", "turn": 1, "device_id": "d", "location": "l",[m
+                        "transcript": "t", "stt_confidence": 0.9, "timestamp": ts()}[m
+             payload[missing] = ""[m
+             with self.assertRaises(workflow.PayloadError):[m
+                 workflow.handle_turn(payload)[m
+[32m+[m[41m                [m
+[32m+[m[32m    def test_empty_location_allowed_for_agent_clarification(self):[m
+[32m+[m[32m        payload = {[m
+[32m+[m[32m            "session_id": "s-location-test",[m
+[32m+[m[32m            "turn": 1,[m
+[32m+[m[32m            "device_id": "pi-3f-01",[m
+[32m+[m[32m            "location": "",[m
+[32m+[m[32m            "transcript": "it's dirty in here",[m
+[32m+[m[32m            "stt_confidence": 0.9,[m
+[32m+[m[32m            "timestamp": ts(),[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        parsed = workflow.validate_payload(payload)[m
+ [m
+[32m+[m[32m        self.assertEqual(parsed["location"], "")[m
+ [m
+ class DashboardTests(unittest.TestCase):[m
+     def setUp(self):[m
