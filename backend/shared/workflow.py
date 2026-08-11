@@ -116,7 +116,9 @@ def _create_request(store, p, transcript, cls, safety_flag, flag_source):
     req = cls.get("request") or {}
     location = req.get("location") or p["location"]
     category = "safety" if safety_flag else req.get("category", "other")
-    team = "supervisor" if safety_flag else req.get("assigned_team", "facilities")
+    # The model may recommend a team, but routing authority stays in code.
+    team = ("supervisor" if safety_flag else
+            agent.TEAM_FOR_CATEGORY.get(category, "facilities"))
     priority = "critical" if safety_flag else req.get("priority", "medium")
 
     rec = {

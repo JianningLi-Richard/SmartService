@@ -13,6 +13,7 @@ also what runs before the agent is provisioned.
 import json
 import logging
 import re
+import time
 
 from . import config
 from .store import get_store
@@ -233,24 +234,148 @@ def classify_with_rules(transcript, panel_location, prior_turns, safety_flag):
 # Foundry agent call
 # --------------------------------------------------------------------------
 def _call_foundry(transcript, panel_location, device_id, prior_turns, stt_confidence):
-    """TODO(Aug 9-11): wire to Azure AI Foundry Agent Service.
+    """Call the registered Foundry agent using the v1 threads/runs API.
 
-    Sketch, so the shape is agreed before the code lands:
-
-        from azure.ai.projects import AIProjectClient
-        from azure.identity import DefaultAzureCredential
-        client = AIProjectClient(endpoint=config.AI_FOUNDRY_ENDPOINT,
-                                 credential=DefaultAzureCredential())
-        thread = client.agents.threads.create()
-        client.agents.messages.create(thread.id, role="user", content=json.dumps(payload))
-        run = client.agents.runs.create_and_process(
-            thread_id=thread.id, agent_id=config.AI_FOUNDRY_AGENT_ID)
-        # handle requires_action -> lookup_requests(**args) -> submit_tool_outputs
-        # parse the final message as JSON against AGENT_OUTPUT_SCHEMA
-
-    Until then this raises, and classify() falls back to the rules above.
+    Authentication uses ``DefaultAzureCredential``. In Azure this resolves to the
+    Function App's managed identity; developers can use ``az login`` locally.
+    Failures bubble up so ``classify`` can safely use the rules fallback.
     """
-    raise NotImplementedError("Foundry agent not wired yet")
+    from azure.ai.agents.models import ToolOutput
+    from azure.ai.projects import AIProjectClient
+    from azure.identity import DefaultAzureCredential
+
+    payload = {
+        "transcript": transcript,
+        "panel_location": panel_location,
+        "device_id": device_id,
+        "prior_turns": prior_turns,
+        "stt_confidence": stt_confidence,
+        "output_schema": AGENT_OUTPUT_SCHEMA,
+    }
+    client = AIProjectClient(endpoint=config.AI_FOUNDRY_ENDPOINT,
+                             credential=DefaultAzureCredential())
+    thread = client.agents.threads.create()
+    client.agents.messages.create(thread_id=thread.id, role="user",
+                                  content=json.dumps(payload))
+    run = client.agents.runs.create(thread_id=thread.id,
+                                    agent_id=config.AI_FOUNDRY_AGENT_ID)
+    deadline = time.monotonic() + (config.AGENT_TIMEOUT_MS / 1000.0)
+
+    while _run_status(run) in ("queued", "in_progress", "requires_action"):
+        if time.monotonic() >= deadline:
+            try:
+                client.agents.runs.cancel(thread_id=thread.id, run_id=run.id)
+            except Exception:
+                log.debug("could not cancel timed-out Foundry run", exc_info=True)
+            raise TimeoutError("Foundry agent exceeded AGENT_TIMEOUT_MS")
+        if _run_status(run) == "requires_action":
+            outputs = _execute_required_tools(run, ToolOutput)
+            run = client.agents.runs.submit_tool_outputs(
+                thread_id=thread.id, run_id=run.id, tool_outputs=outputs)
+        else:
+            time.sleep(0.25)
+            run = client.agents.runs.get(thread_id=thread.id, run_id=run.id)
+
+    if _run_status(run) != "completed":
+        raise RuntimeError("Foundry run ended with status %s: %s" %
+                           (run.status, getattr(run, "last_error", None)))
+    for message in client.agents.messages.list(thread_id=thread.id):
+        role = str(getattr(message, "role", "")).lower()
+        if role.endswith("agent") or role.endswith("assistant"):
+            text = _message_text(message)
+            if text:
+                return _parse_agent_output(text)
+    raise ValueError("Foundry run completed without an agent text response")
+
+
+def _run_status(run):
+    status = getattr(run, "status", "")
+    return str(getattr(status, "value", status)).lower()
+
+
+def _execute_required_tools(run, tool_output_type):
+    action = getattr(run, "required_action", None)
+    details = getattr(action, "submit_tool_outputs", None)
+    calls = getattr(details, "tool_calls", None) or []
+    if not calls:
+        raise ValueError("Foundry requested an action without tool calls")
+    outputs = []
+    for call in calls:
+        function = getattr(call, "function", None)
+        name = getattr(function, "name", None)
+        if name != "lookup_requests":
+            raise ValueError("Foundry requested unsupported tool: %s" % name)
+        try:
+            args = json.loads(getattr(function, "arguments", "{}") or "{}")
+        except json.JSONDecodeError as exc:
+            raise ValueError("Foundry supplied invalid tool arguments") from exc
+        if not isinstance(args, dict) or set(args) - {"device_id", "location", "limit"}:
+            raise ValueError("Foundry supplied unsupported lookup arguments")
+        limit = args.get("limit", 3)
+        if not isinstance(limit, int):
+            raise ValueError("lookup_requests limit must be an integer")
+        args["limit"] = max(1, min(limit, 10))
+        outputs.append(tool_output_type(tool_call_id=call.id,
+                                        output=json.dumps(lookup_requests(**args))))
+    return outputs
+
+
+def _message_text(message):
+    text_messages = getattr(message, "text_messages", None) or []
+    if text_messages:
+        return getattr(getattr(text_messages[-1], "text", None), "value", "")
+    for block in reversed(getattr(message, "content", None) or []):
+        value = getattr(getattr(block, "text", None), "value", None)
+        if value:
+            return value
+    return ""
+
+
+def _parse_agent_output(text):
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        out = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Foundry response is not valid JSON") from exc
+    _validate_agent_output(out)
+    return out
+
+
+def _validate_agent_output(out):
+    if not isinstance(out, dict):
+        raise ValueError("Foundry response must be a JSON object")
+    if out.get("intent") not in INTENTS:
+        raise ValueError("Foundry response has an invalid intent")
+    if out.get("state") not in ("complete", "awaiting_user", "escalated_to_human", "rejected"):
+        raise ValueError("Foundry response has an invalid state")
+    if not isinstance(out.get("listen_again"), bool):
+        raise ValueError("Foundry response listen_again must be boolean")
+    if not isinstance(out.get("speech_reply"), str) or len(out["speech_reply"]) > 300:
+        raise ValueError("Foundry response has an invalid speech_reply")
+    actions = out.get("device_actions", [])
+    if not isinstance(actions, list):
+        raise ValueError("Foundry response device_actions must be an array")
+    out["device_actions"] = actions
+    request = out.get("request")
+    if request is not None:
+        if not isinstance(request, dict):
+            raise ValueError("Foundry response request must be an object or null")
+        if request.get("category") not in CATEGORIES:
+            raise ValueError("Foundry response has an invalid category")
+        if request.get("priority") not in PRIORITIES:
+            raise ValueError("Foundry response has an invalid priority")
+        if not isinstance(request.get("assigned_team"), str):
+            raise ValueError("Foundry response has an invalid assigned_team")
+        confidence = request.get("confidence")
+        if not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
+            raise ValueError("Foundry response confidence must be between 0 and 1")
+        if not isinstance(request.get("safety_flag"), bool):
+            raise ValueError("Foundry response safety_flag must be boolean")
+        if not isinstance(request.get("missing_fields", []), list):
+            raise ValueError("Foundry response missing_fields must be an array")
 
 
 def classify(transcript, panel_location, device_id, prior_turns, stt_confidence, safety_flag):

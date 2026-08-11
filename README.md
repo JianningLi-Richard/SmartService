@@ -156,7 +156,7 @@ Also needed:
 - [x] Functions skeleton, workflow, safety layers, whitelist, escalation timer
 - [x] Rule-based fallback classifier
 - [x] Dashboard: live list, acknowledge/complete, simulate, reporting
-- [ ] Wire the Foundry agent (`shared/agent.py::_call_foundry`) — Aug 9–11
+- [x] Wire the Foundry agent (`shared/agent.py::_call_foundry`)
 - [ ] Wire Azure Table Storage (code done, needs a connection string)
 - [ ] Wire Azure Speech (code done, needs key + region)
 - [ ] Deploy to Azure, App Insights alerts, latency tuning

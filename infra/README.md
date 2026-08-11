@@ -72,9 +72,8 @@ az functionapp restart --name <functionAppName> -g rg-smartservice-demo
 
 **Pin those exact SDK versions.** `azure-ai-projects` 2.x replaced the threads/messages/runs
 (Assistants-style) Agents API with an unrelated versions/sessions/code model — installing
-latest gives you an agent shape `backend/shared/agent.py::_call_foundry`'s sketch can't call.
-`backend/requirements.txt` has the same pins commented in, ready to uncomment when `_call_foundry`
-gets implemented.
+latest gives you an agent shape `backend/shared/agent.py::_call_foundry` cannot call.
+`backend/requirements.txt` includes the same pins used by the Function App.
 
 Re-run `create_foundry_agent.py` any time `SYSTEM_INSTRUCTIONS` or `LOOKUP_TOOL_DEF` change in
 code — it creates a new agent (not an update), so update `AI_FOUNDRY_AGENT_ID` again after.

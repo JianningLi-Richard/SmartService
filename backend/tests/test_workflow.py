@@ -11,10 +11,11 @@ import os
 import sys
 import unittest
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shared import store, workflow  # noqa: E402
+from shared import agent, store, workflow  # noqa: E402
 
 
 def ts(sec=0):
@@ -171,6 +172,37 @@ class ContractTests(unittest.TestCase):
             payload[missing] = ""
             with self.assertRaises(workflow.PayloadError):
                 workflow.handle_turn(payload)
+
+    def test_foundry_json_response_is_validated(self):
+        parsed = agent._parse_agent_output("""```json
+        {"intent":"new_request","state":"complete","listen_again":false,
+         "speech_reply":"Done","request":{"category":"cleaning","location":"1F-Lobby",
+         "priority":"medium","assigned_team":"custodial","confidence":0.9,
+         "safety_flag":false,"missing_fields":[]},"device_actions":[]}
+        ```""")
+        self.assertEqual(parsed["request"]["category"], "cleaning")
+        with self.assertRaises(ValueError):
+            agent._parse_agent_output('{"intent":"invented"}')
+
+    def test_foundry_tool_calls_are_allowlisted_and_bounded(self):
+        call = SimpleNamespace(
+            id="call-1",
+            function=SimpleNamespace(name="lookup_requests", arguments='{"limit":999}'),
+        )
+        run = SimpleNamespace(required_action=SimpleNamespace(
+            submit_tool_outputs=SimpleNamespace(tool_calls=[call])))
+
+        class Output:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+
+        outputs = agent._execute_required_tools(run, Output)
+        self.assertEqual(outputs[0].tool_call_id, "call-1")
+        self.assertEqual(outputs[0].output, "[]")
+
+        call.function.name = "delete_request"
+        with self.assertRaises(ValueError):
+            agent._execute_required_tools(run, Output)
 
 
 class DashboardTests(unittest.TestCase):

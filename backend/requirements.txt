@@ -1,10 +1,9 @@
 azure-functions
 azure-data-tables
 requests
-# Added when the Foundry agent is wired (Aug 9-11):
 # Pin these exact versions -- azure-ai-projects 2.x replaced the
 # threads/messages/runs (Assistants-style) Agents API that _call_foundry's
-# sketch is written against with an unrelated versions/sessions/code model.
-# azure-ai-projects==1.0.0
-# azure-ai-agents==1.1.0
-# azure-identity
+# implementation uses with an unrelated versions/sessions/code model.
+azure-ai-projects==1.0.0
+azure-ai-agents==1.1.0
+azure-identity
