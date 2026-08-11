@@ -37,16 +37,19 @@ The client performs the following workflow:
   - Short leg/flat side: cathode, connected to GND.
 - Use BCM GPIO numbers in the Python program, not physical header numbers.
 
-## 3. LED wiring
+## 3. GPIO wiring
 
-The example wiring below uses BCM GPIO17 for the green LED and BCM GPIO27 for the red LED.
+These values match the current `firmware/pi_voice_client.py` configuration.
 
 | Component         | Raspberry Pi BCM pin | Physical header pin | Connection                       |
 | ----------------- | -------------------- | ------------------- | -------------------------------- |
-| Green LED anode   | GPIO17               | Pin 11              | GPIO17 → resistor → long LED leg |
+| TALK button       | GPIO17               | Pin 11              | Button between GPIO17 and GND    |
+| Green LED anode   | GPIO27               | Pin 13              | GPIO27 → resistor → long LED leg |
 | Green LED cathode | GND                  | Pin 9               | Short LED leg → GND              |
-| Red LED anode     | GPIO27               | Pin 13              | GPIO27 → resistor → long LED leg |
+| Red LED anode     | GPIO22               | Pin 15              | GPIO22 → resistor → long LED leg |
 | Red LED cathode   | GND                  | Pin 14              | Short LED leg → GND              |
+| Buzzer signal     | GPIO18               | Pin 12              | Active buzzer signal             |
+| LCD               | I2C address `0x27`    | SDA/SCL              | PCF8574 I2C backpack             |
 
 Wiring path for each LED:
 
@@ -198,23 +201,33 @@ The directory should contain model data such as `am`, `conf`, and `graph`. Do no
 
 ## 9. Configure the client
 
-Open the Raspberry Pi client:
+Copy the tracked example to an ignored local file. Replace the device-key
+placeholder on the Raspberry Pi only:
 
 ```bash
-nano firmware/pi_voice_client.py
+cp firmware/smartservice.env.example firmware/smartservice.env
+nano firmware/smartservice.env
+chmod 600 firmware/smartservice.env
+source firmware/smartservice.env
 ```
 
-Check the following settings in the file. The exact variable names may differ, so search for the matching values if necessary.
+The public Azure endpoint is included in the example for review. The real device
+key must remain only in `firmware/smartservice.env` and Azure Key Vault; `*.env`
+is ignored by Git.
+
+Check the following settings:
 
 | Setting      | Example                              | Purpose                                |
 | ------------ | ------------------------------------ | -------------------------------------- |
 | Backend URL  | `http://SERVER_IP:PORT/...`          | API endpoint receiving the request     |
+| Device key   | environment variable                 | Sent as the `X-Device-Key` header       |
+| Timeout      | `25` seconds                         | Allows time for Foundry and Speech      |
 | Device ID    | `pi-3f-01`                           | Unique name for this Raspberry Pi      |
 | Location     | `3F-Washroom`                        | Physical service location              |
 | Model path   | `models/vosk-model-small-en-us-0.15` | Extracted Vosk model directory         |
 | Sample rate  | `16000`                              | Speech audio sample rate               |
-| Green GPIO   | `17`                                 | BCM number for the green LED           |
-| Red GPIO     | `27`                                 | BCM number for the red LED             |
+| Green GPIO   | `27`                                 | BCM number for the green LED           |
+| Red GPIO     | `22`                                 | BCM number for the red LED             |
 | Input device | default or device index              | USB microphone selected by sounddevice |
 
 If a relative model path fails because the program is launched from another directory, use an absolute path, for example:
@@ -236,7 +249,7 @@ python - <<'PY'
 from gpiozero import LED
 from time import sleep
 
-green = LED(17)
+green = LED(27)
 green.on()
 sleep(2)
 green.off()
@@ -252,7 +265,7 @@ python - <<'PY'
 from gpiozero import LED
 from time import sleep
 
-red = LED(27)
+red = LED(22)
 red.on()
 sleep(2)
 red.off()
@@ -316,6 +329,7 @@ From the repository root:
 
 ```bash
 source .venv/bin/activate
+source firmware/smartservice.env
 python firmware/pi_voice_client.py
 ```
 

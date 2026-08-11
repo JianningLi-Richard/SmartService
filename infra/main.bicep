@@ -266,7 +266,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'AI_FOUNDRY_ENDPOINT', value: 'https://${aiFoundry.name}.services.ai.azure.com/api/projects/${aiFoundryProjectName}' }
         { name: 'AI_FOUNDRY_AGENT_ID', value: aiFoundryAgentId }
         { name: 'AI_FOUNDRY_KEY', value: '@Microsoft.KeyVault(SecretUri=${aiFoundryKeySecret.properties.secretUri})' }
-        { name: 'AGENT_TIMEOUT_MS', value: '6000' }
+        { name: 'AGENT_TIMEOUT_MS', value: '12000' }
         { name: 'SPEECH_KEY', value: '@Microsoft.KeyVault(SecretUri=${speechKeySecret.properties.secretUri})' }
         { name: 'SPEECH_REGION', value: location }
         { name: 'SPEECH_VOICE', value: speechVoice }

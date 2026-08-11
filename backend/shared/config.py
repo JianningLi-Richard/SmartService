@@ -30,7 +30,7 @@ TABLE_SESSIONS = os.environ.get("TABLE_SESSIONS", "sessions")
 # Agent
 AI_FOUNDRY_ENDPOINT = os.environ.get("AI_FOUNDRY_ENDPOINT", "")
 AI_FOUNDRY_AGENT_ID = os.environ.get("AI_FOUNDRY_AGENT_ID", "")
-AGENT_TIMEOUT_MS = _int("AGENT_TIMEOUT_MS", 6000)
+AGENT_TIMEOUT_MS = _int("AGENT_TIMEOUT_MS", 12000)
 
 # Speech
 SPEECH_KEY = os.environ.get("SPEECH_KEY", "")

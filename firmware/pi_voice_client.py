@@ -17,12 +17,18 @@ from vosk import Model, KaldiRecognizer
 # Configuration
 # =========================================================
 
- #API_URL = "http://localhost:7071/api/voice/turn"#test local
+def env_int(name, default):
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
 
 API_URL = os.getenv(
     "SMARTSERVICE_API_URL",
     "http://localhost:7071/api/voice/turn"
-) # replace if env variable exist, if not run local
+)  # Use local Functions by default; set the env variable for Azure.
+DEVICE_KEY = os.getenv("SMARTSERVICE_DEVICE_KEY", "")
+REQUEST_TIMEOUT_SECONDS = env_int("SMARTSERVICE_REQUEST_TIMEOUT_SECONDS", 25)
 MODEL_PATH = "models/vosk-model-small-en-us-0.15"
 
 PIPER_PATH = "tools/piper/piper"
@@ -490,10 +496,14 @@ def send_request(transcript, confidence, session_id, turn):
     )
 
     try:
+        headers = {}
+        if DEVICE_KEY:
+            headers["X-Device-Key"] = DEVICE_KEY
         response = requests.post(
             API_URL,
             json=payload,
-            timeout=8
+            headers=headers,
+            timeout=REQUEST_TIMEOUT_SECONDS
         )
 
         response.raise_for_status()
@@ -657,6 +667,8 @@ show_lcd(
 print()
 print("Voice client started.")
 print(f"Backend: {API_URL}")
+print(f"Device authentication: {'configured' if DEVICE_KEY else 'not configured'}")
+print(f"Request timeout: {REQUEST_TIMEOUT_SECONDS}s")
 print("Hold TALK, speak, then release.")
 print("Press Ctrl+C to stop.")
 
