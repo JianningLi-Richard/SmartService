@@ -26,12 +26,19 @@ param speechVoice string = 'en-CA-ClaraNeural'
 @description('Static Web Apps is only available in a subset of regions; pick the closest one.')
 param staticWebAppLocation string = 'eastus2'
 
+@description('Set by `az keyvault secret set ... device-keys`, not by hand. This secret resource is a full overwrite on every deploy, so deploy.sh re-reads the current value and passes it back -- otherwise every redeploy wipes it.')
+@secure()
+param deviceKeysValue string = ' '
+
 @description('AI Foundry (Agent Service) has GlobalStandard model quota in eastus2 on this subscription; canadacentral does not.')
 param aiFoundryLocation string = 'eastus2'
 
 @description('Chat model deployed for the Routing Agent.')
 param aiFoundryModel string = 'gpt-5-mini'
 param aiFoundryModelVersion string = '2025-08-07'
+
+@description('Set by create_foundry_agent.py, not by hand. siteConfig.appSettings is a full overwrite on every deploy, so deploy.sh re-reads this from the live app and passes it back -- otherwise every redeploy wipes it.')
+param aiFoundryAgentId string = ''
 
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var namePrefix = '${projectName}-${envName}'
@@ -161,7 +168,7 @@ resource deviceKeysSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'device-keys'
   properties: {
-    value: ' '
+    value: deviceKeysValue
   }
 }
 
@@ -254,7 +261,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'TABLE_REQUESTS', value: 'requests' }
         { name: 'TABLE_SESSIONS', value: 'sessions' }
         { name: 'AI_FOUNDRY_ENDPOINT', value: 'https://${aiFoundry.name}.services.ai.azure.com/api/projects/${aiFoundryProjectName}' }
-        { name: 'AI_FOUNDRY_AGENT_ID', value: '' }
+        { name: 'AI_FOUNDRY_AGENT_ID', value: aiFoundryAgentId }
         { name: 'AI_FOUNDRY_KEY', value: '@Microsoft.KeyVault(SecretUri=${aiFoundryKeySecret.properties.secretUri})' }
         { name: 'AGENT_TIMEOUT_MS', value: '6000' }
         { name: 'SPEECH_KEY', value: '@Microsoft.KeyVault(SecretUri=${speechKeySecret.properties.secretUri})' }
