@@ -25,7 +25,7 @@ from .store import get_store, iso, now, parse_iso
 
 log = logging.getLogger(__name__)
 
-REQUIRED_FIELDS = ("session_id", "device_id", "location", "transcript", "timestamp")
+REQUIRED_FIELDS = ("session_id", "device_id","transcript", "timestamp")
 
 
 class PayloadError(Exception):
@@ -59,7 +59,7 @@ def validate_payload(body):
         "session_id": str(body["session_id"]).strip(),
         "turn": turn,
         "device_id": str(body["device_id"]).strip(),
-        "location": str(body["location"]).strip(),
+        "location": str(body.get("location") or "").strip(),
         "transcript": str(body["transcript"]).strip(),
         "stt_confidence": conf,
         "timestamp": str(body["timestamp"]).strip(),

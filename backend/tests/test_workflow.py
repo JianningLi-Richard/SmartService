@@ -165,13 +165,27 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(len(clean[1]["text"]), 32)        # truncated
 
     def test_missing_fields_rejected(self):
-        for missing in ("session_id", "device_id", "location", "transcript", "timestamp"):
+        for missing in ("session_id", "device_id","transcript", "timestamp"):
             payload = {"session_id": "s", "turn": 1, "device_id": "d", "location": "l",
                        "transcript": "t", "stt_confidence": 0.9, "timestamp": ts()}
             payload[missing] = ""
             with self.assertRaises(workflow.PayloadError):
                 workflow.handle_turn(payload)
+                
+    def test_empty_location_allowed_for_agent_clarification(self):
+        payload = {
+            "session_id": "s-location-test",
+            "turn": 1,
+            "device_id": "pi-3f-01",
+            "location": "",
+            "transcript": "it's dirty in here",
+            "stt_confidence": 0.9,
+            "timestamp": ts(),
+        }
 
+        parsed = workflow.validate_payload(payload)
+
+        self.assertEqual(parsed["location"], "")
 
 class DashboardTests(unittest.TestCase):
     def setUp(self):
