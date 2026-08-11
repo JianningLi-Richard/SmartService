@@ -91,7 +91,7 @@
 
 <script>
 // Point at the mock server, the local Functions host, or the deployed Function App.
-let API = localStorage.getItem("api") || "http://localhost:7071/api";
+let API = localStorage.getItem("api") || ("https:" + "//smartservice-demo-func-aioknthas2bwa.azurewebsites.net/api");
 let items = [], summary = {};
 
 document.getElementById("api").value = API;
