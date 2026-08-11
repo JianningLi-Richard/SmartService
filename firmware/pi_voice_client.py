@@ -17,7 +17,12 @@ from vosk import Model, KaldiRecognizer
 # Configuration
 # =========================================================
 
-API_URL = "http://localhost:7071/api/voice/turn"
+ #API_URL = "http://localhost:7071/api/voice/turn"#test local
+
+API_URL = os.getenv(
+    "SMARTSERVICE_API_URL",
+    "http://localhost:7071/api/voice/turn"
+) # replace if env variable exist, if not run local
 MODEL_PATH = "models/vosk-model-small-en-us-0.15"
 
 PIPER_PATH = "tools/piper/piper"
@@ -651,6 +656,7 @@ show_lcd(
 
 print()
 print("Voice client started.")
+print(f"Backend: {API_URL}")
 print("Hold TALK, speak, then release.")
 print("Press Ctrl+C to stop.")
 
