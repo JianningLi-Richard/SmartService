@@ -386,8 +386,6 @@ def classify(transcript, panel_location, device_id, prior_turns, stt_confidence,
                                 prior_turns, stt_confidence)
             out["source"] = "agent"
             return out
-        except NotImplementedError:
-            pass
         except Exception as exc:
-            log.error("agent call failed (%s) -- using rule-based fallback", exc)
+            log.exception("agent call failed (%s) -- using rule-based fallback", exc)
     return classify_with_rules(transcript, panel_location, prior_turns, safety_flag)

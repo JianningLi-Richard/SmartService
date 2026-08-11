@@ -165,7 +165,7 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
         "agent": "foundry" if config.USE_AGENT else "rule-based-fallback",
         "speech": "azure" if config.USE_SPEECH else "device-fallback",
         "storage": get_store().name,
-        "version": "1.0.0",
+        "version": "1.0.1",
     })
 
 
