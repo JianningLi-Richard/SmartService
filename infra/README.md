@@ -1,7 +1,7 @@
 # Infra — deployment lead
 
-Provisions everything in [docs/api-contract.md](../docs/api-contract.md) section 3 except
-the AI Foundry agent (backend is wiring that directly this week).
+Provisions everything in [docs/api-contract.md](../docs/api-contract.md) section 3,
+including the AI Foundry project and Routing Agent.
 
 ## What gets created
 
@@ -9,9 +9,10 @@ the AI Foundry agent (backend is wiring that directly this week).
 |---|---|
 | Storage account | `requests` / `sessions` tables + Functions runtime storage |
 | Function App (Linux, Python 3.12, Consumption) | the backend |
-| Key Vault (RBAC) | `storage-connection-string`, `speech-key`, `ai-foundry-key` (placeholder), `device-keys` (placeholder) — Function App reads them via Key Vault references, no redeploy needed when a value changes |
+| Key Vault (RBAC) | `storage-connection-string`, `speech-key`, `ai-foundry-key` (unused placeholder — see below), `device-keys` (placeholder) — Function App reads them via Key Vault references, no redeploy needed when a value changes |
 | Log Analytics + Application Insights | telemetry, plus an availability test on `GET /api/health` |
 | Azure AI Speech (F0, free tier) | TTS |
+| Azure AI Foundry (`AIServices` account + project, eastus2) | Routing Agent — model deployment `gpt-5-mini`; Function App calls it via managed identity, no key |
 | Static Web App (Free tier) | dashboard |
 
 ## One-time setup
@@ -42,12 +43,41 @@ After that, `.github/workflows/deploy-{infra,backend,dashboard}.yml` deploy on e
 ## Filling in secrets after the fact
 
 ```bash
-az keyvault secret set --vault-name <keyVaultName> --name ai-foundry-key --value <key>
 az keyvault secret set --vault-name <keyVaultName> --name device-keys --value "pi-3f-01:<key>,pi-1f-02:<key>"
 ```
 
-Also set `AI_FOUNDRY_ENDPOINT` / `AI_FOUNDRY_AGENT_ID` app settings directly (they're not
-secrets): `az functionapp config appsettings set --name <functionAppName> -g rg-smartservice-demo --settings AI_FOUNDRY_ENDPOINT=... AI_FOUNDRY_AGENT_ID=...`
+(`ai-foundry-key` stays an unused empty placeholder — see below, the agent uses the
+Function App's managed identity instead of a key.)
+
+## AI Foundry agent
+
+`infra/deploy.sh` provisions the AI Foundry project and a `gpt-5-mini` model deployment
+and points `AI_FOUNDRY_ENDPOINT` at it, but creating the actual **agent** (an object on
+the Foundry service with its own ID) isn't a Bicep resource — it's a one-time SDK call.
+Run it once after `deploy.sh`:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install azure-ai-projects==1.0.0 azure-ai-agents==1.1.0 azure-identity
+.venv/bin/python infra/create_foundry_agent.py <aiFoundryEndpoint output> gpt-5-mini
+```
+
+It reads `SYSTEM_INSTRUCTIONS` and `LOOKUP_TOOL_DEF` straight from
+`backend/shared/agent.py` so the registered agent never drifts from what the code expects,
+and prints an agent ID (`asst_...`). Set it and restart:
+
+```bash
+az functionapp config appsettings set --name <functionAppName> -g rg-smartservice-demo --settings AI_FOUNDRY_AGENT_ID=<id>
+az functionapp restart --name <functionAppName> -g rg-smartservice-demo
+```
+
+**Pin those exact SDK versions.** `azure-ai-projects` 2.x replaced the threads/messages/runs
+(Assistants-style) Agents API with an unrelated versions/sessions/code model — installing
+latest gives you an agent shape `backend/shared/agent.py::_call_foundry`'s sketch can't call.
+`backend/requirements.txt` has the same pins commented in, ready to uncomment when `_call_foundry`
+gets implemented.
+
+Re-run `create_foundry_agent.py` any time `SYSTEM_INSTRUCTIONS` or `LOOKUP_TOOL_DEF` change in
+code — it creates a new agent (not an update), so update `AI_FOUNDRY_AGENT_ID` again after.
 
 ## Known gap: dashboard sign-in
 

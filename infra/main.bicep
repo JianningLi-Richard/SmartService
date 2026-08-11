@@ -26,6 +26,13 @@ param speechVoice string = 'en-CA-ClaraNeural'
 @description('Static Web Apps is only available in a subset of regions; pick the closest one.')
 param staticWebAppLocation string = 'eastus2'
 
+@description('AI Foundry (Agent Service) has GlobalStandard model quota in eastus2 on this subscription; canadacentral does not.')
+param aiFoundryLocation string = 'eastus2'
+
+@description('Chat model deployed for the Routing Agent.')
+param aiFoundryModel string = 'gpt-5-mini'
+param aiFoundryModelVersion string = '2025-08-07'
+
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var namePrefix = '${projectName}-${envName}'
 var storageAccountName = take(toLower(replace('st${projectName}${envName}${uniqueSuffix}', '-', '')), 24)
@@ -33,6 +40,8 @@ var keyVaultName = take('kv-${namePrefix}-${uniqueSuffix}', 24)
 var functionAppName = '${namePrefix}-func-${uniqueSuffix}'
 var speechAccountName = '${namePrefix}-speech-${uniqueSuffix}'
 var staticWebAppName = '${namePrefix}-dashboard'
+var aiFoundryName = '${namePrefix}-ai-${uniqueSuffix}'
+var aiFoundryProjectName = 'smartservice'
 
 // ---------- Storage (Table Storage for requests/sessions + Functions runtime) ----------
 
@@ -168,6 +177,47 @@ resource speechAccount 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
   }
 }
 
+// ---------- Azure AI Foundry (Routing Agent) ----------
+// Unified "AIServices" account + project (replaces the old hub/workspace split).
+// The Function App talks to it with its managed identity — no key in app settings.
+
+resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+  name: aiFoundryName
+  location: aiFoundryLocation
+  kind: 'AIServices'
+  sku: { name: 'S0' }
+  identity: { type: 'SystemAssigned' }
+  properties: {
+    customSubDomainName: aiFoundryName
+    publicNetworkAccess: 'Enabled'
+    allowProjectManagement: true
+  }
+}
+
+resource aiFoundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
+  parent: aiFoundry
+  name: aiFoundryProjectName
+  location: aiFoundryLocation
+  identity: { type: 'SystemAssigned' }
+  properties: {}
+}
+
+resource aiFoundryModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: aiFoundry
+  name: aiFoundryModel
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 10
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: aiFoundryModel
+      version: aiFoundryModelVersion
+    }
+  }
+}
+
 // ---------- Function App (Linux, Python) ----------
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
@@ -203,7 +253,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'AZURE_STORAGE_CONNECTION_STRING', value: '@Microsoft.KeyVault(SecretUri=${storageConnStringSecret.properties.secretUri})' }
         { name: 'TABLE_REQUESTS', value: 'requests' }
         { name: 'TABLE_SESSIONS', value: 'sessions' }
-        { name: 'AI_FOUNDRY_ENDPOINT', value: '' }
+        { name: 'AI_FOUNDRY_ENDPOINT', value: 'https://${aiFoundry.name}.services.ai.azure.com/api/projects/${aiFoundryProjectName}' }
         { name: 'AI_FOUNDRY_AGENT_ID', value: '' }
         { name: 'AI_FOUNDRY_KEY', value: '@Microsoft.KeyVault(SecretUri=${aiFoundryKeySecret.properties.secretUri})' }
         { name: 'AGENT_TIMEOUT_MS', value: '6000' }
@@ -231,6 +281,18 @@ resource kvSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' 
   }
 }
 
+// Lets the Function App call the Foundry Agent Service using its managed identity
+// (DefaultAzureCredential) instead of an API key.
+resource aiFoundryDeveloperRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(aiFoundry.id, functionApp.id, 'Azure AI Developer')
+  scope: aiFoundry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '64702f94-c441-49e6-a78b-ef80e0188fee')
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // ---------- Static Web App (dashboard) ----------
 
 resource staticWebApp 'Microsoft.Web/staticSites@2023-01-01' = {
@@ -247,3 +309,6 @@ output staticWebAppHostname string = staticWebApp.properties.defaultHostname
 output keyVaultName string = keyVault.name
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
 output storageAccountName string = storage.name
+output aiFoundryName string = aiFoundry.name
+output aiFoundryEndpoint string = 'https://${aiFoundry.name}.services.ai.azure.com/api/projects/${aiFoundryProjectName}'
+output aiFoundryModelDeploymentName string = aiFoundryModelDeployment.name
