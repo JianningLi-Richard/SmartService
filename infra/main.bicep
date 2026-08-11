@@ -30,6 +30,9 @@ param staticWebAppLocation string = 'eastus2'
 @secure()
 param deviceKeysValue string = ' '
 
+@description('Set by the deploy-backend workflow (Azure/functions-action), not by hand -- it points this at a storage blob SAS URL when it deploys code via RBAC. "1" is only correct before any code has ever been deployed. siteConfig.appSettings is a full overwrite on every deploy, so deploy.sh re-reads the live value and passes it back -- otherwise every infra redeploy breaks the running app by resetting this to "1" with no valid package behind it.')
+param websiteRunFromPackage string = '1'
+
 @description('AI Foundry (Agent Service) has GlobalStandard model quota in eastus2 on this subscription; canadacentral does not.')
 param aiFoundryLocation string = 'eastus2'
 
@@ -255,7 +258,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'AzureWebJobsStorage', value: 'DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${storage.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}' }
         { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
         { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'python' }
-        { name: 'WEBSITE_RUN_FROM_PACKAGE', value: '1' }
+        { name: 'WEBSITE_RUN_FROM_PACKAGE', value: websiteRunFromPackage }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
         { name: 'AZURE_STORAGE_CONNECTION_STRING', value: '@Microsoft.KeyVault(SecretUri=${storageConnStringSecret.properties.secretUri})' }
         { name: 'TABLE_REQUESTS', value: 'requests' }

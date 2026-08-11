@@ -18,13 +18,19 @@ az group create --name "$RESOURCE_GROUP" --location "$LOCATION" --output none
 
 # main.bicep's siteConfig.appSettings and the device-keys secret are full
 # overwrites on every deploy -- read back whatever is live today so a redeploy
-# doesn't wipe out AI_FOUNDRY_AGENT_ID (set by create_foundry_agent.py) or
-# device-keys (set by hand). Empty/missing on a first deploy is fine.
+# doesn't wipe out AI_FOUNDRY_AGENT_ID (set by create_foundry_agent.py),
+# WEBSITE_RUN_FROM_PACKAGE (set by the deploy-backend workflow -- resetting this
+# to "1" breaks the running app), or device-keys (set by hand). Empty/missing
+# on a first deploy is fine.
 FUNC_APP_NAME="$(az functionapp list -g "$RESOURCE_GROUP" --query "[0].name" -o tsv 2>/dev/null || true)"
 AI_FOUNDRY_AGENT_ID_CURRENT=""
+WEBSITE_RUN_FROM_PACKAGE_CURRENT="1"
 if [ -n "$FUNC_APP_NAME" ]; then
   AI_FOUNDRY_AGENT_ID_CURRENT="$(az functionapp config appsettings list --name "$FUNC_APP_NAME" -g "$RESOURCE_GROUP" \
     --query "[?name=='AI_FOUNDRY_AGENT_ID'].value | [0]" -o tsv 2>/dev/null || true)"
+  CURRENT_PACKAGE="$(az functionapp config appsettings list --name "$FUNC_APP_NAME" -g "$RESOURCE_GROUP" \
+    --query "[?name=='WEBSITE_RUN_FROM_PACKAGE'].value | [0]" -o tsv 2>/dev/null || true)"
+  [ -n "$CURRENT_PACKAGE" ] && WEBSITE_RUN_FROM_PACKAGE_CURRENT="$CURRENT_PACKAGE"
 fi
 
 KEY_VAULT_NAME="$(az keyvault list -g "$RESOURCE_GROUP" --query "[0].name" -o tsv 2>/dev/null || true)"
@@ -41,7 +47,8 @@ az deployment group create \
   --parameters "$SCRIPT_DIR/main.parameters.json" \
   --parameters location="$LOCATION" \
   --parameters aiFoundryAgentId="$AI_FOUNDRY_AGENT_ID_CURRENT" \
-  --parameters deviceKeysValue="$DEVICE_KEYS_CURRENT"
+  --parameters deviceKeysValue="$DEVICE_KEYS_CURRENT" \
+  --parameters websiteRunFromPackage="$WEBSITE_RUN_FROM_PACKAGE_CURRENT"
 
 echo "Done. Outputs:"
 az deployment group show \
