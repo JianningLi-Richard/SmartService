@@ -211,6 +211,26 @@ chmod 600 firmware/smartservice.env
 source firmware/smartservice.env
 ```
 
+The file uses `NAME=value` syntax without `export`, so it works both with a
+shell and with systemd's `EnvironmentFile=` directive. When loading it in a
+shell, export its variables with:
+
+```bash
+set -a
+source firmware/smartservice.env
+set +a
+```
+
+For a systemd service, find the USB microphone index first:
+
+```bash
+source .venv/bin/activate
+python -m sounddevice
+```
+
+Set that input index in `SMARTSERVICE_MICROPHONE_DEVICE`. This avoids relying
+on PortAudio device `-1`, which is often unavailable to a system service.
+
 The public Azure endpoint is included in the example for review. The real device
 key must remain only in `firmware/smartservice.env` and Azure Key Vault; `*.env`
 is ignored by Git.
@@ -329,7 +349,9 @@ From the repository root:
 
 ```bash
 source .venv/bin/activate
+set -a
 source firmware/smartservice.env
+set +a
 python firmware/pi_voice_client.py
 ```
 

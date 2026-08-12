@@ -29,6 +29,10 @@ API_URL = os.getenv(
 )  # Use local Functions by default; set the env variable for Azure.
 DEVICE_KEY = os.getenv("SMARTSERVICE_DEVICE_KEY", "")
 REQUEST_TIMEOUT_SECONDS = env_int("SMARTSERVICE_REQUEST_TIMEOUT_SECONDS", 25)
+MICROPHONE_DEVICE_RAW = os.getenv("SMARTSERVICE_MICROPHONE_DEVICE", "").strip()
+MICROPHONE_DEVICE = (int(MICROPHONE_DEVICE_RAW)
+                     if MICROPHONE_DEVICE_RAW.lstrip("-").isdigit()
+                     else (MICROPHONE_DEVICE_RAW or None))
 MODEL_PATH = "models/vosk-model-small-en-us-0.15"
 
 PIPER_PATH = "tools/piper/piper"
@@ -170,6 +174,7 @@ def start_recording():
     recording = True
 
     audio_stream = sd.RawInputStream(
+        device=MICROPHONE_DEVICE,
         samplerate=SAMPLE_RATE,
         blocksize=4000,
         dtype="int16",
@@ -668,6 +673,7 @@ print()
 print("Voice client started.")
 print(f"Backend: {API_URL}")
 print(f"Device authentication: {'configured' if DEVICE_KEY else 'not configured'}")
+print(f"Microphone device: {MICROPHONE_DEVICE if MICROPHONE_DEVICE is not None else 'system default'}")
 print(f"Request timeout: {REQUEST_TIMEOUT_SECONDS}s")
 print("Hold TALK, speak, then release.")
 print("Press Ctrl+C to stop.")
