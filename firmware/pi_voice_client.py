@@ -5,6 +5,7 @@ import base64
 import os
 import subprocess
 import re
+import shutil
 from datetime import datetime, timezone
 
 import requests
@@ -418,27 +419,35 @@ def play_server_audio(result):
             os.remove(audio_path)
             
 def speak_local(text):
-    """Generate speech with Piper and play it through JBL."""
+    """Generate speech locally and play it through the default speaker."""
 
     if not text:
         return
 
-    raw_audio_path = "/tmp/piper_reply.wav"
-    loud_audio_path = "/tmp/piper_reply_loud.wav"
+    raw_audio_path = "/tmp/smartservice_reply_raw.wav"
+    loud_audio_path = "/tmp/smartservice_reply_loud.wav"
 
     try:
-        print("Generating speech with Piper...")
-
-        subprocess.run(
-            [
-                PIPER_PATH,
-                "--model", PIPER_MODEL,
-                "--output_file", raw_audio_path
-            ],
-            input=text,
-            text=True,
-            check=True
-        )
+        if os.path.isfile(PIPER_PATH) and os.path.isfile(PIPER_MODEL):
+            print("Generating speech with Piper...")
+            subprocess.run(
+                [PIPER_PATH, "--model", PIPER_MODEL,
+                 "--output_file", raw_audio_path],
+                input=text, text=True, check=True
+            )
+            voice_engine = "Piper"
+        elif shutil.which("espeak-ng"):
+            print("Piper is not installed. Generating speech with espeak-ng...")
+            subprocess.run(
+                ["espeak-ng", "-v", "en-us", "-s", "155",
+                 "-w", raw_audio_path, text],
+                check=True
+            )
+            voice_engine = "espeak-ng"
+        else:
+            print("No local TTS engine found. Install espeak-ng.")
+            show_lcd("Reply received", text[:16])
+            return
 
         print("Increasing speech volume...")
 
@@ -454,7 +463,7 @@ def speak_local(text):
             check=True
         )
 
-        print("Playing Piper reply through JBL...")
+        print(f"Playing {voice_engine} reply through default speaker...")
 
         subprocess.run(
             [
@@ -465,10 +474,10 @@ def speak_local(text):
         )
 
     except FileNotFoundError as error:
-        print(f"Piper program not found: {error}")
+        print(f"Local audio program not found: {error}")
 
     except subprocess.CalledProcessError as error:
-        print(f"Piper command failed: {error}")
+        print(f"Local speech command failed: {error}")
 
     except Exception as error:
         print(f"Local TTS failed: {error}")
