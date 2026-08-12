@@ -115,7 +115,6 @@ LOCATION_PATTERNS = [
     (r"\b(?:first|1st|floor one|floor 1|ground floor)\b", "1F-Lobby"),
     (r"\blobby\b", "1F-Lobby"),
     (r"\b(?:cafeteria|canteen|kitchen)\b", "1F-Cafeteria"),
-    (r"\b(?:washroom|restroom|bathroom)\b", "3F-Washroom"),
     (r"\b(?:server room|it room)\b", "2F-ServerRoom"),
 ]
 
@@ -188,6 +187,12 @@ def detect_location(text):
 
 def detect_category(text):
     low = (text or "").lower()
+    # In a clarification conversation, an explicit service in the newest turn
+    # overrides a category inferred from an older turn.
+    latest = low.rsplit(" -- ", 1)[-1]
+    for cat, words in CATEGORY_KEYWORDS.items():
+        if any(w in latest for w in words):
+            return cat
     for cat, words in CATEGORY_KEYWORDS.items():
         if any(w in low for w in words):
             return cat

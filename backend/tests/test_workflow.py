@@ -131,6 +131,24 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("location", r["speech_reply"].lower())
         self.assertIsNone(r["request"])
 
+    def test_generic_washroom_does_not_assume_panel_location(self):
+        r = turn("s-generic-washroom", 1, "the washroom is dirty",
+                 location="3F-Washroom")
+        self.assertEqual(r["state"], "awaiting_user")
+        self.assertIn("location", r["speech_reply"].lower())
+        self.assertIsNone(r["request"])
+
+    def test_latest_service_overrides_old_clarification_category(self):
+        r1 = turn("s-category-correction", 1,
+                  "the printer is broken in room 205")
+        self.assertEqual(r1["state"], "complete")
+        # Exercise the classifier directly with an earlier IT phrase and a new
+        # cleaning phrase, matching the combined clarification transcript shape.
+        result = agent.classify_with_rules(
+            "the printer is broken -- the washroom is dirty",
+            "3F-Washroom", [{"turn": 1}], False)
+        self.assertEqual(result["request"]["category"], "cleaning")
+
     # 4 Tool use
     def test_status_query_uses_lookup_and_creates_nothing(self):
         turn("s-4a", 1, "the printer on floor two is jammed")
