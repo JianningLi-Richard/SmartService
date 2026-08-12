@@ -30,6 +30,15 @@ def turn(session, n, text, conf=0.9, location="3F-Washroom", device="pi-3f-01"):
     return body
 
 
+def local_tts_turn(session, text):
+    status, body, telem = workflow.handle_turn({
+        "session_id": session, "turn": 1, "device_id": "pi-3f-01",
+        "location": "3F-Washroom", "transcript": text,
+        "stt_confidence": 0.9, "timestamp": ts(1), "prefer_local_tts": True,
+    })
+    return body, telem
+
+
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
         store._store = store.MemoryStore()  # fresh state per test
@@ -117,6 +126,13 @@ class WorkflowTests(unittest.TestCase):
         actuators = [a["actuator"] for a in r["device_actions"]]
         self.assertIn("led_red", actuators)
         self.assertIn("buzzer", actuators)
+
+    def test_pi_can_skip_cloud_tts_for_a_fast_response(self):
+        r, telemetry = local_tts_turn(
+            "s-local-tts", "the printer in room 205 is broken")
+        self.assertEqual(r["state"], "complete")
+        self.assertEqual(r["audio_b64"], "")
+        self.assertEqual(telemetry["tts_ms"], 0)
 
     # 6 Safety (semantic)
     def test_safety_semantic_same_enforced_outcome(self):

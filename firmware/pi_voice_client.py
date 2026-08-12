@@ -159,7 +159,7 @@ def audio_callback(indata, frames, time_info, status):
 
 
 def start_recording():
-    """Start recording from the default microphone."""
+    """Start recording using the already-warm Bluetooth stream."""
 
     global audio_stream
     global audio_chunks
@@ -168,26 +168,31 @@ def start_recording():
     audio_chunks = []
     recording = True
 
-    audio_stream = sd.RawInputStream(
-        device=MICROPHONE_DEVICE,
-        samplerate=SAMPLE_RATE,
-        blocksize=4000,
-        dtype="int16",
-        channels=1,
-        callback=audio_callback
-    )
-
-    audio_stream.start()
+    if audio_stream is None:
+        audio_stream = sd.RawInputStream(
+            device=MICROPHONE_DEVICE,
+            samplerate=SAMPLE_RATE,
+            blocksize=4000,
+            dtype="int16",
+            channels=1,
+            callback=audio_callback
+        )
+        audio_stream.start()
 
 
 def stop_recording():
-    """Stop microphone recording."""
+    """Stop collecting audio while keeping Bluetooth capture warm."""
 
     global audio_stream
     global recording
 
     recording = False
 
+
+
+def close_audio_stream():
+    """Close the persistent stream during application shutdown."""
+    global audio_stream
     if audio_stream is not None:
         audio_stream.stop()
         audio_stream.close()
@@ -488,7 +493,8 @@ def send_request(transcript, confidence, session_id, turn):
         "location": DEVICE_LOCATION,
         "transcript": transcript,
         "stt_confidence": round(confidence, 2),
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "prefer_local_tts": True,
     }
 
     print("Sending request:")
@@ -567,10 +573,8 @@ def button_pressed():
         "Wait for beep"
     )
 
-    # Bluetooth headset microphones often need a moment to switch into capture
-    # mode. Start the stream first, discard warm-up/beep audio, then prompt.
+    # The Bluetooth stream is kept warm between presses, so this beep is prompt.
     start_recording()
-    time.sleep(MICROPHONE_WARMUP_SECONDS)
     beep()
     time.sleep(0.1)
     audio_chunks = []
@@ -681,6 +685,13 @@ show_lcd(
     "System Ready"
 )
 
+# Keep Bluetooth HFP capture active so a button press does not wait for profile
+# negotiation. Discard startup audio after the configured one-time warm-up.
+start_recording()
+time.sleep(MICROPHONE_WARMUP_SECONDS)
+audio_chunks = []
+recording = False
+
 print()
 print("Voice client started.")
 print(f"Backend: {API_URL}")
@@ -701,6 +712,7 @@ except KeyboardInterrupt:
 
 finally:
     stop_recording()
+    close_audio_stream()
 
     green_led.off()
     red_led.off()

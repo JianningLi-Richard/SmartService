@@ -420,7 +420,8 @@ def classify(transcript, panel_location, device_id, prior_turns, stt_confidence,
     """Classify one utterance. Never raises -- falls back to rules on any failure."""
     # Avoid a remote agent round trip for emergencies and clearly structured
     # service/location phrases. Foundry remains available for ambiguous language.
-    if safety_flag or detect_category(transcript) or detect_location(transcript):
+    if (safety_flag or prior_turns or detect_category(transcript)
+            or detect_location(transcript)):
         return classify_with_rules(transcript, panel_location, prior_turns, safety_flag)
     if config.USE_AGENT:
         try:

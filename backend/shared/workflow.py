@@ -63,6 +63,7 @@ def validate_payload(body):
         "transcript": str(body["transcript"]).strip(),
         "stt_confidence": conf,
         "timestamp": str(body["timestamp"]).strip(),
+        "prefer_local_tts": bool(body.get("prefer_local_tts", False)),
     }
 
 
@@ -78,7 +79,9 @@ def check_device_key(device_id, provided_key):
 # Response envelope
 # --------------------------------------------------------------------------
 def _envelope(p, intent, state, listen_again, request, actions, reply, tts=True):
-    audio_b64, audio_format, tts_ms = speech.synthesize(reply) if tts else ("", "mp3", 0)
+    use_cloud_tts = tts and not p.get("prefer_local_tts", False)
+    audio_b64, audio_format, tts_ms = (speech.synthesize(reply)
+                                             if use_cloud_tts else ("", "mp3", 0))
     clean, dropped = whitelist.validate_actions(actions, log)
     return {
         "session_id": p["session_id"],
