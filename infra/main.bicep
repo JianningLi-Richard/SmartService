@@ -274,7 +274,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'DEVICE_KEYS', value: '@Microsoft.KeyVault(SecretUri=${deviceKeysSecret.properties.secretUri})' }
         { name: 'SESSION_TTL_SECONDS', value: '60' }
         { name: 'STT_CONFIDENCE_THRESHOLD', value: '0.55' }
-        { name: 'MAX_CLARIFICATION_TURNS', value: '2' }
+        { name: 'MAX_CLARIFICATION_TURNS', value: '3' }
         { name: 'ESCALATION_MINUTES', value: '10' }
       ]
     }

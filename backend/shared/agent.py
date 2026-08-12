@@ -51,18 +51,25 @@ AGENT_OUTPUT_SCHEMA = {
 
 SYSTEM_INSTRUCTIONS = """You are the Routing Agent for a wall-mounted service request panel.
 
-You receive a transcript of what someone said, the panel's location, and any
-earlier turns of the same conversation. Determine the intent, extract category,
-location and urgency, recommend a priority and responsible team, and write a short
+You receive a transcript of what someone said, the panel's physical location, and
+any earlier turns of the same conversation. Determine the intent, extract category,
+the location explicitly spoken by the user, and urgency, recommend a priority and responsible team, and write a short
 spoken reply (one or two sentences, plain speech, no markdown, no lists).
 
 Rules you must not break:
 - Only emit device actions from the whitelist you were given. Never invent one.
 - Never dispatch emergency services. If someone may be hurt, set safety_flag true
   and say a supervisor is being notified.
-- Never invent a location or a request ID. If the location is missing, set
-  state to awaiting_user, list "location" in missing_fields, set listen_again true,
-  and ask one short question.
+- The panel_location is device metadata only. Never use it as the request location.
+- Never invent a location or request ID. A request needs both an explicit service
+  category and an explicit location/room/floor from the user.
+- If location is missing, set state to awaiting_user, add "location" to
+  missing_fields, set listen_again true, and ask for the room, floor, or location.
+- If the service category is missing, set category to "other", add "category" to
+  missing_fields, set listen_again true, and ask what service is needed (cleaning,
+  maintenance, IT support, or supplies). A location alone is not a service request.
+- Preserve details from earlier turns. If one missing field is supplied on a later
+  turn, combine it with the previously supplied field before completing the request.
 - Never resolve or cancel a request without spoken confirmation from the user.
 - To answer a question about an existing request, call lookup_requests. Do not
   create a new request for a question.
@@ -94,6 +101,7 @@ OUT_OF_SCOPE_HINTS = ["unlock", "open the door", "disable", "turn off the alarm"
                       "override", "let me in", "give me access"]
 
 LOCATION_PATTERNS = [
+    (r"\broom\s+(\d+[a-z]?)\b", None),
     (r"\b(?:third|3rd|floor three|floor 3)\b[^.]{0,20}\b(?:washroom|restroom|bathroom)\b", "3F-Washroom"),
     (r"\b(?:second|2nd|floor two|floor 2)\b", "2F-Office"),
     (r"\b(?:third|3rd|floor three|floor 3)\b", "3F-Corridor"),
@@ -146,8 +154,9 @@ def lookup_requests(device_id=None, location=None, limit=3):
 def detect_location(text):
     low = (text or "").lower()
     for pattern, loc in LOCATION_PATTERNS:
-        if re.search(pattern, low):
-            return loc
+        match = re.search(pattern, low)
+        if match:
+            return loc or "Room-%s" % match.group(1).upper()
     return None
 
 
@@ -156,7 +165,7 @@ def detect_category(text):
     for cat, words in CATEGORY_KEYWORDS.items():
         if any(w in low for w in words):
             return cat
-    return "other"
+    return None
 
 
 def detect_intent(text):
@@ -202,18 +211,30 @@ def classify_with_rules(transcript, panel_location, prior_turns, safety_flag):
 
     category = detect_category(transcript)
     location = detect_location(transcript)
+    missing = []
+    if not category:
+        missing.append("category")
     if not location:
+        missing.append("location")
+    if missing:
+        if missing == ["location"]:
+            reply = "What room, floor, or location needs that service?"
+        elif missing == ["category"]:
+            reply = ("I have the location. What service do you need there: cleaning, "
+                     "maintenance, IT support, or supplies?")
+        else:
+            reply = "What service do you need, and in which room, floor, or location?"
         return {
             "intent": intent, "state": "awaiting_user", "listen_again": True,
-            "speech_reply": "Sure. Which room or floor is that in?",
+            "speech_reply": reply,
             # Priority follows from the category, not the location -- so a request
             # created without a location (clarification cap, dashboard simulate)
             # is still prioritised correctly.
-            "request": {"category": category, "location": None,
+            "request": {"category": category or "other", "location": location,
                         "priority": PRIORITY_FOR_CATEGORY.get(category, "medium"),
                         "assigned_team": TEAM_FOR_CATEGORY.get(category, "facilities"),
                         "confidence": 0.5, "safety_flag": False,
-                        "missing_fields": ["location"]},
+                        "missing_fields": missing},
             "device_actions": [], "source": "rules",
         }
 
@@ -246,7 +267,6 @@ def _call_foundry(transcript, panel_location, device_id, prior_turns, stt_confid
 
     payload = {
         "transcript": transcript,
-        "panel_location": panel_location,
         "device_id": device_id,
         "prior_turns": prior_turns,
         "stt_confidence": stt_confidence,
@@ -384,8 +404,45 @@ def classify(transcript, panel_location, device_id, prior_turns, stt_confidence,
         try:
             out = _call_foundry(transcript, panel_location, device_id,
                                 prior_turns, stt_confidence)
+            out = _require_request_details(out)
             out["source"] = "agent"
             return out
         except Exception as exc:
             log.exception("agent call failed (%s) -- using rule-based fallback", exc)
     return classify_with_rules(transcript, panel_location, prior_turns, safety_flag)
+
+
+def _require_request_details(out):
+    """Enforce that a normal request has both service and spoken location.
+
+    This is application policy, not a model suggestion. The Foundry payload does
+    not include the panel location, so it cannot be copied into a ticket.
+    """
+    if out.get("intent") not in ("new_request", "clarification_answer"):
+        return out
+    request = out.get("request") or {}
+    missing = []
+    if not request.get("category") or request.get("category") == "other":
+        missing.append("category")
+    if not request.get("location"):
+        missing.append("location")
+    if not missing:
+        return out
+    request.setdefault("category", "other")
+    request.setdefault("location", None)
+    request.setdefault("priority", "medium")
+    request.setdefault("assigned_team", "facilities")
+    request.setdefault("confidence", 0.5)
+    request.setdefault("safety_flag", False)
+    request["missing_fields"] = missing
+    out["request"] = request
+    out["state"] = "awaiting_user"
+    out["listen_again"] = True
+    if missing == ["location"]:
+        out["speech_reply"] = "What room, floor, or location needs that service?"
+    elif missing == ["category"]:
+        out["speech_reply"] = ("I have the location. What service do you need there: "
+                               "cleaning, maintenance, IT support, or supplies?")
+    else:
+        out["speech_reply"] = "What service do you need, and in which room, floor, or location?"
+    return out

@@ -4,7 +4,6 @@ import uuid
 import base64
 import os
 import subprocess
-from difflib import SequenceMatcher
 from datetime import datetime, timezone
 
 import requests
@@ -42,22 +41,6 @@ PIPER_VOLUME = "1.5"
 DEVICE_ID = "pi-3f-01"
 DEVICE_LOCATION = "3F-Washroom"
 SAMPLE_RATE = 16000
-
-DEMO_PHRASES = [
-    "the printer on floor two is jammed",
-    "it's dirty in here",
-    "third floor washroom",
-    "what happened to my request",
-    "someone fell down the stairs",
-    "unlock the server room door",
-    "[unk]"
-]
-
-CANONICAL_DEMO_PHRASES = [
-    phrase
-    for phrase in DEMO_PHRASES
-    if phrase != "[unk]"
-]
 
 # =========================================================
 # Hardware
@@ -228,38 +211,12 @@ def clean_transcript(transcript):
 
     return " ".join(words).strip()
 
-def match_demo_phrase(transcript):
-    """Match Vosk text to the closest demo phrase."""
-
-    if not transcript:
-        return transcript, 0.0
-
-    best_phrase = transcript
-    best_score = 0.0
-
-    for phrase in CANONICAL_DEMO_PHRASES:
-        score = SequenceMatcher(
-            None,
-            transcript.lower(),
-            phrase.lower()
-        ).ratio()
-
-        if score > best_score:
-            best_phrase = phrase
-            best_score = score
-
-    if best_score >= 0.55:
-        return best_phrase, best_score
-
-    return transcript, best_score
-
 def transcribe_audio():
-    """Convert recorded audio into text."""
+    """Convert recorded audio into free-form text."""
 
     recognizer = KaldiRecognizer(
         vosk_model,
-        SAMPLE_RATE,
-        json.dumps(DEMO_PHRASES)
+        SAMPLE_RATE
     )
 
     recognizer.SetWords(True)
@@ -602,12 +559,7 @@ def button_released():
         print(f"Raw transcript: {transcript}")
         print(f"Vosk confidence: {confidence:.2f}")
 
-        transcript, match_score = match_demo_phrase(
-            transcript
-        )
-
-        print(f"Matched transcript: {transcript}")
-        print(f"Demo match score: {match_score:.2f}")
+        print(f"Clean transcript: {transcript}")
 
         if not transcript or transcript == "[unk]":
             red_led.on()

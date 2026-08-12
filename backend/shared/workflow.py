@@ -114,7 +114,7 @@ def _make_request_id(location, seq):
 
 def _create_request(store, p, transcript, cls, safety_flag, flag_source):
     req = cls.get("request") or {}
-    location = req.get("location") or p["location"]
+    location = req.get("location") or "Unspecified"
     category = "safety" if safety_flag else req.get("category", "other")
     # The model may recommend a team, but routing authority stays in code.
     team = ("supervisor" if safety_flag else
@@ -260,8 +260,9 @@ def handle_turn(body, device_key=None):
             store.delete_session(p["device_id"], p["session_id"])
             telemetry["request_id"] = rec["request_id"]
             telemetry["clarify_capped"] = True
-            reply = ("I still don't have the location, so I've passed this to a "
-                     "supervisor to follow up.")
+            missing = ", ".join((cls.get("request") or {}).get("missing_fields", []))
+            reply = ("I still need %s, so I've passed this to a supervisor to follow up."
+                     % (missing or "more request details"))
             resp, extra = _envelope(p, "clarification_answer", "escalated_to_human",
                                     False, _device_view(rec),
                                     whitelist.complete(rec["request_id"]), reply)
@@ -276,7 +277,7 @@ def handle_turn(body, device_key=None):
         telemetry["clarify_turn"] = clarify_count
         resp, extra = _envelope(p, intent, "awaiting_user", True, None,
                                 whitelist.listening_again(),
-                                cls.get("speech_reply") or "Which room or floor is that in?")
+                                cls.get("speech_reply") or "What service and location do you need?")
         return 200, resp, {**telemetry, **extra, "total_ms": int((time.time()-started)*1000)}
 
     # Step 6e -- complete

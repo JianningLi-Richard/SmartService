@@ -59,9 +59,29 @@ class WorkflowTests(unittest.TestCase):
     def test_clarification_capped_at_two_turns(self):
         turn("s-3", 1, "it's dirty in here")
         r2 = turn("s-3", 2, "um over there")
-        self.assertEqual(r2["state"], "escalated_to_human")
-        self.assertFalse(r2["listen_again"])  # no infinite loop
-        self.assertEqual(r2["request"]["assigned_team"], "supervisor")
+        self.assertEqual(r2["state"], "awaiting_user")
+        r3 = turn("s-3", 3, "still over there")
+        self.assertEqual(r3["state"], "escalated_to_human")
+        self.assertFalse(r3["listen_again"])  # no infinite loop
+        self.assertEqual(r3["request"]["assigned_team"], "supervisor")
+
+    def test_location_first_then_asks_for_service(self):
+        r1 = turn("s-location-first", 1, "room 205")
+        self.assertEqual(r1["state"], "awaiting_user")
+        self.assertTrue(r1["listen_again"])
+        self.assertIn("service", r1["speech_reply"].lower())
+        self.assertIsNone(r1["request"])
+        r2 = turn("s-location-first", 2, "the printer is broken")
+        self.assertEqual(r2["state"], "complete")
+        self.assertEqual(r2["request"]["location"], "Room-205")
+        self.assertEqual(r2["request"]["category"], "it_support")
+
+    def test_service_first_does_not_use_panel_location(self):
+        r = turn("s-service-first", 1, "the printer is broken",
+                 location="3F-Washroom")
+        self.assertEqual(r["state"], "awaiting_user")
+        self.assertIn("location", r["speech_reply"].lower())
+        self.assertIsNone(r["request"])
 
     # 4 Tool use
     def test_status_query_uses_lookup_and_creates_nothing(self):
