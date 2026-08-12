@@ -8,7 +8,6 @@ import re
 import shutil
 import sys
 import wave
-import queue
 import threading
 from datetime import datetime, timezone
 
@@ -123,10 +122,6 @@ audio_chunks = []
 audio_stream = None
 recording = False
 processing = False
-recognition_queue = None
-recognition_thread = None
-live_recognizer = None
-live_result = None
 
 current_session_id = None
 current_turn =1
@@ -187,10 +182,7 @@ def audio_callback(indata, frames, time_info, status):
         print(f"Audio status: {status}")
 
     if recording:
-        chunk = bytes(indata)
-        audio_chunks.append(chunk)
-        if recognition_queue is not None:
-            recognition_queue.put(chunk)
+        audio_chunks.append(bytes(indata))
 
 
 def ensure_audio_stream():
@@ -204,33 +196,15 @@ def ensure_audio_stream():
         audio_stream.start()
 
 
-def recognition_worker():
-    """Run Vosk while the user speaks instead of after button release."""
-    global live_result
-    while True:
-        chunk = recognition_queue.get()
-        if chunk is None:
-            break
-        live_recognizer.AcceptWaveform(chunk)
-    live_result = json.loads(live_recognizer.FinalResult())
-
-
 def start_recording():
     """Start recording using the already-warm Bluetooth stream."""
 
     global audio_stream
     global audio_chunks
     global recording
-    global recognition_queue, recognition_thread, live_recognizer, live_result
 
     ensure_audio_stream()
     audio_chunks = []
-    live_result = None
-    live_recognizer = KaldiRecognizer(vosk_model, SAMPLE_RATE)
-    live_recognizer.SetWords(True)
-    recognition_queue = queue.Queue()
-    recognition_thread = threading.Thread(target=recognition_worker, daemon=True)
-    recognition_thread.start()
     recording = True
 
 
@@ -241,10 +215,6 @@ def stop_recording():
     global recording
 
     recording = False
-    if recognition_queue is not None:
-        recognition_queue.put(None)
-    if recognition_thread is not None:
-        recognition_thread.join(timeout=3)
 
 
 
@@ -331,7 +301,11 @@ def is_local_safety_alert(transcript):
 
 def transcribe_audio():
     """Convert recorded audio into free-form text."""
-    result = live_result or {}
+    recognizer = KaldiRecognizer(vosk_model, SAMPLE_RATE)
+    recognizer.SetWords(True)
+    for chunk in audio_chunks:
+        recognizer.AcceptWaveform(chunk)
+    result = json.loads(recognizer.FinalResult())
 
     transcript = result.get("text", "")
     confidence = calculate_confidence(result)
@@ -709,7 +683,9 @@ def button_released():
             "Please wait"
         )
 
+        stt_started = time.monotonic()
         transcript, confidence = transcribe_audio()
+        print(f"Local STT processing: {time.monotonic() - stt_started:.2f}s")
         transcript = clean_transcript(transcript)
 
         print(f"Raw transcript: {transcript}")
