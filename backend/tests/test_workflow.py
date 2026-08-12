@@ -152,6 +152,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("led_red", actuators)
         self.assertIn("buzzer", actuators)
 
+    def test_spoken_911_is_an_immediate_safety_escalation(self):
+        r = turn("s-spoken-911", 1,
+                 "someone is on the stairs please call nine one one")
+        self.assertEqual(r["state"], "escalated_to_human")
+        self.assertTrue(r["request"]["safety_flag"])
+
+    def test_vosk_fall_phrase_is_an_immediate_safety_escalation(self):
+        r = turn("s-misheard-fall", 1, "someone for thou endure stairs")
+        self.assertEqual(r["state"], "escalated_to_human")
+        self.assertTrue(r["request"]["safety_flag"])
+
     def test_pi_can_skip_cloud_tts_for_a_fast_response(self):
         r, telemetry = local_tts_turn(
             "s-local-tts", "the printer in room 205 is broken")

@@ -54,10 +54,11 @@ PIPER_PATH = os.getenv(
     "SMARTSERVICE_PIPER_PATH",
     os.path.join(PROJECT_ROOT, "tools", "piper", "piper"),
 )
-PIPER_MODEL = os.getenv(
-    "SMARTSERVICE_PIPER_MODEL",
-    os.path.join(PROJECT_ROOT, "models", "piper", "en_US-lessac-medium.onnx"),
-)
+PIPER_MODEL = os.getenv("SMARTSERVICE_PIPER_MODEL", "")
+if not PIPER_MODEL:
+    low_model = os.path.join(PROJECT_ROOT, "models", "piper", "en_US-lessac-low.onnx")
+    medium_model = os.path.join(PROJECT_ROOT, "models", "piper", "en_US-lessac-medium.onnx")
+    PIPER_MODEL = low_model if os.path.isfile(low_model) else medium_model
 PIPER_VOLUME = "1.5"
 
 try:
@@ -254,6 +255,17 @@ def clean_transcript(transcript):
     cleaned = " ".join(words).strip()
     # Vosk occasionally joins the next word to a room number ("307is").
     cleaned = re.sub(r"(?<=\d)(?=[a-zA-Z])", " ", cleaned)
+    # Conservative repairs for emergency phrases frequently misheard through
+    # Bluetooth HFP. These require both a person cue and stairs/down context.
+    cleaned = re.sub(
+        r"\bsome(?:one| lawn)?\s+(?:for|fawn|fall|fell)\s+(?:thou|down)\s+"
+        r"(?:in\s+)?(?:the|endure|those)?\s*stairs\b",
+        "someone fell down the stairs",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\bcall\s+nine\s+one\s+one\b", "call 911", cleaned,
+                     flags=re.IGNORECASE)
     digit_words = {
         "zero": "0", "oh": "0", "one": "1", "won": "1",
         "two": "2", "to": "2", "too": "2", "true": "2",
@@ -400,9 +412,8 @@ def play_server_audio(result):
     if not audio_b64:
         print("No server audio received. Using local TTS.")
 
-        speak_local(
-            result.get("speech_reply", "")
-        )
+        speak_local(result.get("speech_reply", ""),
+                    fast=result.get("state") == "escalated_to_human")
         return
 
     if audio_format not in ("wav", "mp3"):
@@ -444,7 +455,7 @@ def play_server_audio(result):
         if os.path.exists(audio_path):
             os.remove(audio_path)
             
-def speak_local(text):
+def speak_local(text, fast=False):
     """Generate speech locally and play it through the default speaker."""
 
     if not text:
@@ -454,7 +465,14 @@ def speak_local(text):
     loud_audio_path = "/tmp/smartservice_reply_loud.wav"
 
     try:
-        if piper_voice is not None:
+        if fast and shutil.which("espeak-ng"):
+            print("Urgent reply: generating immediately with espeak-ng...")
+            subprocess.run(
+                ["espeak-ng", "-v", "en-us", "-s", "165",
+                 "-w", raw_audio_path, text], check=True
+            )
+            voice_engine = "espeak-ng emergency"
+        elif piper_voice is not None:
             print("Generating speech with cached Piper voice...")
             with wave.open(raw_audio_path, "wb") as wav_file:
                 piper_voice.synthesize_wav(text, wav_file)

@@ -21,12 +21,15 @@ SAFETY_KEYWORDS = [
     "chemical spill", "carbon monoxide",
     # explicit calls for help
     "emergency", "call 911", "ambulance", "someone is hurt",
+    "call nine one one", "phone nine one one",
 ]
 
 # Matched as substrings, not word-boundary, because these are phrases.
 SAFETY_PHRASES = [
     "isn't moving", "isnt moving", "is not moving", "won't wake", "wont wake",
     "can't breathe", "cant breathe", "needs help now",
+    "fall down the stairs", "fell down the stairs",
+    "fawn thou endure stairs", "for thou endure stairs",
 ]
 
 _WORD_RE = [re.compile(r"\b" + re.escape(k)) for k in SAFETY_KEYWORDS]
