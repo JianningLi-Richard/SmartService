@@ -224,6 +224,30 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             agent._execute_required_tools(run, Output)
 
+    def test_unspoken_agent_location_is_rejected(self):
+        out = {
+            "intent": "new_request", "state": "complete", "listen_again": False,
+            "speech_reply": "Created", "device_actions": [],
+            "request": {"category": "it_support", "location": "3F-Washroom",
+                        "priority": "medium", "assigned_team": "it",
+                        "confidence": 0.9, "safety_flag": False, "missing_fields": []},
+        }
+        checked = agent._require_request_details(out, "the printer is broken")
+        self.assertEqual(checked["state"], "awaiting_user")
+        self.assertIsNone(checked["request"]["location"])
+        self.assertIn("location", checked["request"]["missing_fields"])
+
+    def test_spoken_room_location_is_accepted(self):
+        out = {
+            "intent": "new_request", "state": "complete", "listen_again": False,
+            "speech_reply": "Created", "device_actions": [],
+            "request": {"category": "cleaning", "location": "Room-205",
+                        "priority": "medium", "assigned_team": "custodial",
+                        "confidence": 0.9, "safety_flag": False, "missing_fields": []},
+        }
+        checked = agent._require_request_details(out, "cleaning is needed in room 205")
+        self.assertEqual(checked["state"], "complete")
+
 
 class DashboardTests(unittest.TestCase):
     def setUp(self):

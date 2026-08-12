@@ -404,7 +404,7 @@ def classify(transcript, panel_location, device_id, prior_turns, stt_confidence,
         try:
             out = _call_foundry(transcript, panel_location, device_id,
                                 prior_turns, stt_confidence)
-            out = _require_request_details(out)
+            out = _require_request_details(out, transcript)
             out["source"] = "agent"
             return out
         except Exception as exc:
@@ -412,7 +412,23 @@ def classify(transcript, panel_location, device_id, prior_turns, stt_confidence,
     return classify_with_rules(transcript, panel_location, prior_turns, safety_flag)
 
 
-def _require_request_details(out):
+def _normalized_words(value):
+    return " ".join(re.findall(r"[a-z0-9]+", (value or "").lower()))
+
+
+def _location_is_spoken(location, transcript):
+    """Return true only when the proposed location is supported by user speech."""
+    if not location:
+        return False
+    parsed = detect_location(transcript)
+    if parsed and _normalized_words(parsed) == _normalized_words(location):
+        return True
+    normalized_location = _normalized_words(location)
+    normalized_transcript = _normalized_words(transcript)
+    return bool(normalized_location and normalized_location in normalized_transcript)
+
+
+def _require_request_details(out, transcript):
     """Enforce that a normal request has both service and spoken location.
 
     This is application policy, not a model suggestion. The Foundry payload does
@@ -421,6 +437,9 @@ def _require_request_details(out):
     if out.get("intent") not in ("new_request", "clarification_answer"):
         return out
     request = out.get("request") or {}
+    if request.get("location") and not _location_is_spoken(request["location"], transcript):
+        log.warning("agent proposed a location not present in user speech; dropping it")
+        request["location"] = None
     missing = []
     if not request.get("category") or request.get("category") == "other":
         missing.append("category")
