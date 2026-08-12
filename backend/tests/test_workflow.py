@@ -102,6 +102,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r2["state"], "complete")
         self.assertEqual(r2["request"]["location"], "Room-205")
 
+    def test_room_number_joined_to_next_word_is_understood(self):
+        r1 = turn("s-joined-room", 1, "the printer is broken")
+        self.assertEqual(r1["state"], "awaiting_user")
+        r2 = turn("s-joined-room", 2, "it is in room 307is here")
+        self.assertEqual(r2["state"], "complete")
+        self.assertEqual(r2["request"]["location"], "Room-307")
+
     def test_vosk_room_homophones_are_repaired(self):
         r1 = turn("s-room-homophones", 1, "the printer is broken")
         self.assertEqual(r1["state"], "awaiting_user")

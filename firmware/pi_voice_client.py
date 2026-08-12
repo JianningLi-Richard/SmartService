@@ -252,6 +252,8 @@ def clean_transcript(transcript):
     ]
 
     cleaned = " ".join(words).strip()
+    # Vosk occasionally joins the next word to a room number ("307is").
+    cleaned = re.sub(r"(?<=\d)(?=[a-zA-Z])", " ", cleaned)
     digit_words = {
         "zero": "0", "oh": "0", "one": "1", "won": "1",
         "two": "2", "to": "2", "too": "2", "true": "2",
@@ -464,9 +466,20 @@ def speak_local(text):
             existing_library_path = piper_env.get("LD_LIBRARY_PATH", "")
             piper_env["LD_LIBRARY_PATH"] = (piper_dir + (":" + existing_library_path
                                                           if existing_library_path else ""))
+            piper_command = [PIPER_PATH]
+            # The standalone Piper binary expects /lib/ld-linux-aarch64.so.1,
+            # while current Debian/Raspberry Pi OS keeps it in the multiarch
+            # directory. Invoke the real loader directly without a system symlink.
+            for loader_path in (
+                "/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+                "/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+            ):
+                if os.path.isfile(loader_path):
+                    piper_command = [loader_path, PIPER_PATH]
+                    break
             subprocess.run(
-                [PIPER_PATH, "--model", PIPER_MODEL,
-                 "--output_file", raw_audio_path],
+                piper_command + ["--model", PIPER_MODEL,
+                                  "--output_file", raw_audio_path],
                 input=text, text=True, check=True, env=piper_env
             )
             voice_engine = "Piper"

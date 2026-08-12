@@ -161,6 +161,7 @@ def lookup_requests(device_id=None, location=None, limit=3):
 # --------------------------------------------------------------------------
 def detect_location(text):
     low = (text or "").lower()
+    low = re.sub(r"(?<=\d)(?=[a-z])", " ", low)
     room = re.search(
         r"\broom(?:\s+(?:number|is|in|the))*\s+"
         r"((?:(?:zero|oh|one|won|two|to|too|true|three|tree|four|for|five|fly|"
