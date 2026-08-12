@@ -231,6 +231,19 @@ python -m sounddevice
 Set that input index in `SMARTSERVICE_MICROPHONE_DEVICE`. This avoids relying
 on PortAudio device `-1`, which is often unavailable to a system service.
 
+For free-form speech, use the more accurate 128 MB English lgraph model:
+
+```bash
+cd ~/SmartService/models
+wget https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip
+unzip vosk-model-en-us-0.22-lgraph.zip
+rm vosk-model-en-us-0.22-lgraph.zip
+```
+
+Set `SMARTSERVICE_VOSK_MODEL_PATH="models/vosk-model-en-us-0.22-lgraph"`.
+The client also warms up a Bluetooth microphone before the ready beep; speak
+only after the beep and the LCD says `Speak now`.
+
 The public Azure endpoint is included in the example for review. The real device
 key must remain only in `firmware/smartservice.env` and Azure Key Vault; `*.env`
 is ignored by Git.

@@ -22,6 +22,13 @@ def env_int(name, default):
     except ValueError:
         return default
 
+
+def env_float(name, default):
+    try:
+        return float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
 API_URL = os.getenv(
     "SMARTSERVICE_API_URL",
     "http://localhost:7071/api/voice/turn"
@@ -32,7 +39,11 @@ MICROPHONE_DEVICE_RAW = os.getenv("SMARTSERVICE_MICROPHONE_DEVICE", "").strip()
 MICROPHONE_DEVICE = (int(MICROPHONE_DEVICE_RAW)
                      if MICROPHONE_DEVICE_RAW.lstrip("-").isdigit()
                      else (MICROPHONE_DEVICE_RAW or None))
-MODEL_PATH = "models/vosk-model-small-en-us-0.15"
+MICROPHONE_WARMUP_SECONDS = env_float("SMARTSERVICE_MICROPHONE_WARMUP_SECONDS", 0.8)
+MODEL_PATH = os.getenv(
+    "SMARTSERVICE_VOSK_MODEL_PATH",
+    "models/vosk-model-small-en-us-0.15",
+)
 
 PIPER_PATH = "tools/piper/piper"
 PIPER_MODEL = "models/piper/en_US-lessac-medium.onnx"
@@ -512,22 +523,32 @@ def button_pressed():
     """Start recording when the button is pressed."""
 
     global processing
+    global audio_chunks
 
     if processing:
         return
-
-    print("Listening...")
 
     red_led.off()
     green_led.on()
 
     show_lcd(
+        "Getting ready...",
+        "Wait for beep"
+    )
+
+    # Bluetooth headset microphones often need a moment to switch into capture
+    # mode. Start the stream first, discard warm-up/beep audio, then prompt.
+    start_recording()
+    time.sleep(MICROPHONE_WARMUP_SECONDS)
+    beep()
+    time.sleep(0.1)
+    audio_chunks = []
+
+    print("Listening... Speak now.")
+    show_lcd(
         "Listening...",
         "Speak now"
     )
-
-    beep()
-    start_recording()
 
 
 def button_released():
@@ -626,6 +647,8 @@ print("Voice client started.")
 print(f"Backend: {API_URL}")
 print(f"Device authentication: {'configured' if DEVICE_KEY else 'not configured'}")
 print(f"Microphone device: {MICROPHONE_DEVICE if MICROPHONE_DEVICE is not None else 'system default'}")
+print(f"Microphone warm-up: {MICROPHONE_WARMUP_SECONDS}s")
+print(f"Vosk model: {MODEL_PATH}")
 print(f"Request timeout: {REQUEST_TIMEOUT_SECONDS}s")
 print("Hold TALK, speak, then release.")
 print("Press Ctrl+C to stop.")
