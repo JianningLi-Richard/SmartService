@@ -112,6 +112,14 @@ LOCATION_PATTERNS = [
     (r"\b(?:server room|it room)\b", "2F-ServerRoom"),
 ]
 
+ROOM_DIGIT_WORDS = {
+    "zero": "0", "oh": "0", "one": "1", "won": "1",
+    "two": "2", "to": "2", "too": "2", "true": "2",
+    "three": "3", "tree": "3", "four": "4", "for": "4",
+    "five": "5", "fly": "5", "six": "6", "seven": "7",
+    "eight": "8", "ate": "8", "nine": "9",
+}
+
 PRIORITY_FOR_CATEGORY = {"safety": "critical", "maintenance": "high",
                          "it_support": "medium", "cleaning": "medium", "supplies": "low"}
 
@@ -153,6 +161,16 @@ def lookup_requests(device_id=None, location=None, limit=3):
 # --------------------------------------------------------------------------
 def detect_location(text):
     low = (text or "").lower()
+    room = re.search(
+        r"\broom(?:\s+(?:number|is|in|the))*\s+"
+        r"((?:(?:zero|oh|one|won|two|to|too|true|three|tree|four|for|five|fly|"
+        r"six|seven|eight|ate|nine)\s*){1,5})\b",
+        low,
+    )
+    if room:
+        digits = "".join(ROOM_DIGIT_WORDS[token] for token in room.group(1).split())
+        if digits:
+            return "Room-%s" % digits
     for pattern, loc in LOCATION_PATTERNS:
         match = re.search(pattern, low)
         if match:
@@ -400,6 +418,10 @@ def _validate_agent_output(out):
 
 def classify(transcript, panel_location, device_id, prior_turns, stt_confidence, safety_flag):
     """Classify one utterance. Never raises -- falls back to rules on any failure."""
+    # Avoid a remote agent round trip for emergencies and clearly structured
+    # service/location phrases. Foundry remains available for ambiguous language.
+    if safety_flag or detect_category(transcript) or detect_location(transcript):
+        return classify_with_rules(transcript, panel_location, prior_turns, safety_flag)
     if config.USE_AGENT:
         try:
             out = _call_foundry(transcript, panel_location, device_id,

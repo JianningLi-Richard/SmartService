@@ -76,6 +76,20 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r2["request"]["location"], "Room-205")
         self.assertEqual(r2["request"]["category"], "it_support")
 
+    def test_spoken_digit_room_number_is_understood(self):
+        r1 = turn("s-spoken-room", 1, "the printer is broken")
+        self.assertEqual(r1["state"], "awaiting_user")
+        r2 = turn("s-spoken-room", 2, "it is in room two zero five")
+        self.assertEqual(r2["state"], "complete")
+        self.assertEqual(r2["request"]["location"], "Room-205")
+
+    def test_vosk_room_homophones_are_repaired(self):
+        r1 = turn("s-room-homophones", 1, "the printer is broken")
+        self.assertEqual(r1["state"], "awaiting_user")
+        r2 = turn("s-room-homophones", 2, "i say it is in room true zero fly")
+        self.assertEqual(r2["state"], "complete")
+        self.assertEqual(r2["request"]["location"], "Room-205")
+
     def test_service_first_does_not_use_panel_location(self):
         r = turn("s-service-first", 1, "the printer is broken",
                  location="3F-Washroom")

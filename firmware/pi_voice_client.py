@@ -4,6 +4,7 @@ import uuid
 import base64
 import os
 import subprocess
+import re
 from datetime import datetime, timezone
 
 import requests
@@ -212,7 +213,7 @@ def calculate_confidence(result):
     return sum(scores) / len(scores)
 #clean transcript
 def clean_transcript(transcript):
-    """Remove unknown Vosk words."""
+    """Remove unknown words and repair common headset number mistakes."""
 
     words = [
         word
@@ -220,7 +221,37 @@ def clean_transcript(transcript):
         if word != "[unk]"
     ]
 
-    return " ".join(words).strip()
+    cleaned = " ".join(words).strip()
+    digit_words = {
+        "zero": "0", "oh": "0", "one": "1", "won": "1",
+        "two": "2", "to": "2", "too": "2", "true": "2",
+        "three": "3", "tree": "3", "four": "4", "for": "4",
+        "five": "5", "fly": "5", "six": "6", "seven": "7",
+        "eight": "8", "ate": "8", "nine": "9",
+    }
+
+    def normalize_room(match):
+        tokens = match.group(1).lower().split()
+        digits = [digit_words.get(token) for token in tokens]
+        return ("room " + "".join(digits)) if all(digits) else match.group(0)
+
+    number_words = "|".join(sorted(map(re.escape, digit_words), key=len, reverse=True))
+    return re.sub(
+        rf"\broom(?:\s+(?:number|is|in|the))*\s+((?:(?:{number_words})\s*){{1,5}})\b",
+        normalize_room, cleaned, flags=re.IGNORECASE,
+    ).strip()
+
+
+def is_local_safety_alert(transcript):
+    """Conservative emergency phrases that can alert before the network reply."""
+    low = (transcript or "").lower()
+    phrases = (
+        "fell down", "has fallen", "collapsed", "unconscious",
+        "not breathing", "can't breathe", "cant breathe", "bleeding",
+        "someone is hurt", "call 911", "emergency", "fire", "smoke",
+        "gas leak", "electric shock", "choking", "seizure",
+    )
+    return any(phrase in low for phrase in phrases)
 
 def transcribe_audio():
     """Convert recorded audio into free-form text."""
@@ -598,6 +629,14 @@ def button_released():
         if current_session_id is None:
             current_session_id = "s-" + uuid.uuid4().hex[:6]
             current_turn = 1
+
+        # Alert locally first; still send the request so staff are notified.
+        if is_local_safety_alert(transcript):
+            print("Local safety alert detected; notifying backend now.")
+            show_lcd("URGENT ALERT", "Notifying staff")
+            red_led.on()
+            urgent_pattern(700)
+            red_led.off()
 
         result = send_request(
             transcript,
