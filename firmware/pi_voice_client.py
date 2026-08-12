@@ -6,6 +6,8 @@ import os
 import subprocess
 import re
 import shutil
+import sys
+import wave
 from datetime import datetime, timezone
 
 import requests
@@ -51,6 +53,13 @@ PIPER_PATH = "tools/piper/piper"
 PIPER_MODEL = "models/piper/en_US-lessac-medium.onnx"
 PIPER_VOLUME = "1.5"
 
+try:
+    from piper import PiperVoice
+except ImportError:
+    PiperVoice = None
+
+piper_voice = None
+
 DEVICE_ID = "pi-3f-01"
 DEVICE_LOCATION = "3F-Washroom"
 SAMPLE_RATE = 16000
@@ -86,6 +95,14 @@ lcd = CharLCD(
 print("Loading Vosk model...")
 vosk_model = Model(MODEL_PATH)
 print("Vosk model loaded.")
+
+if PiperVoice is not None and os.path.isfile(PIPER_MODEL):
+    try:
+        print("Loading Piper voice...")
+        piper_voice = PiperVoice.load(PIPER_MODEL)
+        print("Piper voice loaded.")
+    except Exception as error:
+        print(f"Piper voice could not be loaded: {error}")
 
 
 # =========================================================
@@ -428,7 +445,12 @@ def speak_local(text):
     loud_audio_path = "/tmp/smartservice_reply_loud.wav"
 
     try:
-        if os.path.isfile(PIPER_PATH) and os.path.isfile(PIPER_MODEL):
+        if piper_voice is not None:
+            print("Generating speech with cached Piper voice...")
+            with wave.open(raw_audio_path, "wb") as wav_file:
+                piper_voice.synthesize_wav(text, wav_file)
+            voice_engine = "Piper"
+        elif os.path.isfile(PIPER_PATH) and os.path.isfile(PIPER_MODEL):
             print("Generating speech with Piper...")
             subprocess.run(
                 [PIPER_PATH, "--model", PIPER_MODEL,
@@ -515,6 +537,7 @@ def send_request(transcript, confidence, session_id, turn):
     )
 
     try:
+        request_started = time.monotonic()
         headers = {}
         if DEVICE_KEY:
             headers["X-Device-Key"] = DEVICE_KEY
@@ -527,6 +550,7 @@ def send_request(transcript, confidence, session_id, turn):
 
         response.raise_for_status()
         result = response.json()
+        print(f"Backend round trip: {time.monotonic() - request_started:.2f}s")
 
         print("Server response:")
         print(f"State: {result.get('state')}")

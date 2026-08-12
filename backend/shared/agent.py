@@ -201,7 +201,12 @@ def classify_with_rules(transcript, panel_location, prior_turns, safety_flag):
     Sets a deliberately low confidence so the dashboard shows it was not the agent
     and workflow.py can route low-confidence items for human review.
     """
-    intent = "clarification_answer" if prior_turns else detect_intent(transcript)
+    detected_intent = detect_intent(transcript)
+    # A restricted command or status question must override clarification state.
+    # Otherwise a prior room/service can accidentally turn "unlock the door" into
+    # a valid maintenance request.
+    intent = (detected_intent if detected_intent in ("out_of_scope", "status_query")
+              else ("clarification_answer" if prior_turns else detected_intent))
 
     if safety_flag:
         return {

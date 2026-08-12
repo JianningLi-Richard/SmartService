@@ -149,6 +149,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(r["request"])
         self.assertNotIn("lock", [a["actuator"] for a in r["device_actions"]])
 
+    def test_restricted_command_overrides_prior_clarification(self):
+        r1 = turn("s-restricted-followup", 1, "room 20")
+        self.assertEqual(r1["state"], "awaiting_user")
+        r2 = turn("s-restricted-followup", 2,
+                  "please unlock the server room door for me")
+        self.assertEqual(r2["state"], "rejected")
+        self.assertIsNone(r2["request"])
+
     # 8 Edge: rapid double press
     def test_double_press_creates_one_request(self):
         turn("s-8", 1, "the light in the lobby is broken")
