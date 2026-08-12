@@ -297,7 +297,8 @@ def is_local_safety_alert(transcript):
         "someone is hurt", "call 911", "emergency", "fire", "smoke",
         "gas leak", "electric shock", "choking", "seizure",
     )
-    return any(phrase in low for phrase in phrases)
+    return any(re.search(r"\b" + re.escape(phrase) + r"\b", low)
+               for phrase in phrases)
 
 def transcribe_audio():
     """Convert recorded audio into free-form text."""

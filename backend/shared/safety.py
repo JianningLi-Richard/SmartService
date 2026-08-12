@@ -24,7 +24,6 @@ SAFETY_KEYWORDS = [
     "call nine one one", "phone nine one one",
 ]
 
-# Matched as substrings, not word-boundary, because these are phrases.
 SAFETY_PHRASES = [
     "isn't moving", "isnt moving", "is not moving", "won't wake", "wont wake",
     "can't breathe", "cant breathe", "needs help now",
@@ -32,7 +31,8 @@ SAFETY_PHRASES = [
     "fawn thou endure stairs", "for thou endure stairs",
 ]
 
-_WORD_RE = [re.compile(r"\b" + re.escape(k)) for k in SAFETY_KEYWORDS]
+_WORD_RE = [re.compile(r"\b" + re.escape(k) + r"\b") for k in SAFETY_KEYWORDS]
+_PHRASE_RE = [re.compile(r"\b" + re.escape(p) + r"\b") for p in SAFETY_PHRASES]
 
 
 def keyword_flag(transcript):
@@ -42,7 +42,7 @@ def keyword_flag(transcript):
     low = transcript.lower()
     if any(rx.search(low) for rx in _WORD_RE):
         return True
-    return any(p in low for p in SAFETY_PHRASES)
+    return any(rx.search(low) for rx in _PHRASE_RE)
 
 
 def resolve(transcript, agent_flag):

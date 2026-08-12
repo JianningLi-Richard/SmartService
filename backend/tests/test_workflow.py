@@ -163,6 +163,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["state"], "escalated_to_human")
         self.assertTrue(r["request"]["safety_flag"])
 
+    def test_fireplace_does_not_trigger_fire_emergency(self):
+        r = turn("s-fireplace", 1,
+                 "please create a cleaning request near the room 205 fireplace")
+        self.assertEqual(r["state"], "complete")
+        self.assertFalse(r["request"]["safety_flag"])
+        self.assertEqual(r["request"]["category"], "cleaning")
+
     def test_pi_can_skip_cloud_tts_for_a_fast_response(self):
         r, telemetry = local_tts_turn(
             "s-local-tts", "the printer in room 205 is broken")
