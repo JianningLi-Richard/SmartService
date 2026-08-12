@@ -8,6 +8,8 @@ import re
 import shutil
 import sys
 import wave
+import queue
+import threading
 from datetime import datetime, timezone
 
 import requests
@@ -121,6 +123,10 @@ audio_chunks = []
 audio_stream = None
 recording = False
 processing = False
+recognition_queue = None
+recognition_thread = None
+live_recognizer = None
+live_result = None
 
 current_session_id = None
 current_turn =1
@@ -181,7 +187,32 @@ def audio_callback(indata, frames, time_info, status):
         print(f"Audio status: {status}")
 
     if recording:
-        audio_chunks.append(bytes(indata))
+        chunk = bytes(indata)
+        audio_chunks.append(chunk)
+        if recognition_queue is not None:
+            recognition_queue.put(chunk)
+
+
+def ensure_audio_stream():
+    """Open the Bluetooth capture stream once and keep it warm."""
+    global audio_stream
+    if audio_stream is None:
+        audio_stream = sd.RawInputStream(
+            device=MICROPHONE_DEVICE, samplerate=SAMPLE_RATE, blocksize=4000,
+            dtype="int16", channels=1, callback=audio_callback
+        )
+        audio_stream.start()
+
+
+def recognition_worker():
+    """Run Vosk while the user speaks instead of after button release."""
+    global live_result
+    while True:
+        chunk = recognition_queue.get()
+        if chunk is None:
+            break
+        live_recognizer.AcceptWaveform(chunk)
+    live_result = json.loads(live_recognizer.FinalResult())
 
 
 def start_recording():
@@ -190,20 +221,17 @@ def start_recording():
     global audio_stream
     global audio_chunks
     global recording
+    global recognition_queue, recognition_thread, live_recognizer, live_result
 
+    ensure_audio_stream()
     audio_chunks = []
+    live_result = None
+    live_recognizer = KaldiRecognizer(vosk_model, SAMPLE_RATE)
+    live_recognizer.SetWords(True)
+    recognition_queue = queue.Queue()
+    recognition_thread = threading.Thread(target=recognition_worker, daemon=True)
+    recognition_thread.start()
     recording = True
-
-    if audio_stream is None:
-        audio_stream = sd.RawInputStream(
-            device=MICROPHONE_DEVICE,
-            samplerate=SAMPLE_RATE,
-            blocksize=4000,
-            dtype="int16",
-            channels=1,
-            callback=audio_callback
-        )
-        audio_stream.start()
 
 
 def stop_recording():
@@ -213,6 +241,10 @@ def stop_recording():
     global recording
 
     recording = False
+    if recognition_queue is not None:
+        recognition_queue.put(None)
+    if recognition_thread is not None:
+        recognition_thread.join(timeout=3)
 
 
 
@@ -299,20 +331,7 @@ def is_local_safety_alert(transcript):
 
 def transcribe_audio():
     """Convert recorded audio into free-form text."""
-
-    recognizer = KaldiRecognizer(
-        vosk_model,
-        SAMPLE_RATE
-    )
-
-    recognizer.SetWords(True)
-
-    for chunk in audio_chunks:
-        recognizer.AcceptWaveform(chunk)
-
-    result = json.loads(
-        recognizer.FinalResult()
-    )
+    result = live_result or {}
 
     transcript = result.get("text", "")
     confidence = calculate_confidence(result)
@@ -395,8 +414,13 @@ def execute_action(item):
 
 def execute_actions(actions):
     """Execute all device actions."""
-
-    for item in actions:
+    urgent = [item for item in actions if
+              (item.get("actuator"), item.get("action")) in
+              (("led_red", "blink_fast"), ("buzzer", "pattern_urgent"))]
+    normal = [item for item in actions if item not in urgent]
+    for item in urgent:
+        threading.Thread(target=execute_action, args=(item,), daemon=True).start()
+    for item in normal:
         execute_action(item)
         
 # =========================================================
@@ -650,11 +674,10 @@ def button_pressed():
         "Wait for beep"
     )
 
-    # The Bluetooth stream is kept warm between presses, so this beep is prompt.
-    start_recording()
+    # The Bluetooth stream is warm. Beep first so it is not recognized as speech.
     beep()
     time.sleep(0.1)
-    audio_chunks = []
+    start_recording()
 
     print("Listening... Speak now.")
     show_lcd(
@@ -763,11 +786,10 @@ show_lcd(
 )
 
 # Keep Bluetooth HFP capture active so a button press does not wait for profile
-# negotiation. Discard startup audio after the configured one-time warm-up.
-start_recording()
+# negotiation. Recognition starts only after the TALK beep.
+ensure_audio_stream()
 time.sleep(MICROPHONE_WARMUP_SECONDS)
 audio_chunks = []
-recording = False
 
 print()
 print("Voice client started.")
