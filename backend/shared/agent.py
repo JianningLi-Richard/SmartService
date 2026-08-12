@@ -115,9 +115,9 @@ LOCATION_PATTERNS = [
 ROOM_DIGIT_WORDS = {
     "zero": "0", "oh": "0", "one": "1", "won": "1",
     "two": "2", "to": "2", "too": "2", "true": "2",
-    "three": "3", "tree": "3", "four": "4", "for": "4",
+    "three": "3", "tree": "3", "trees": "3", "four": "4", "for": "4",
     "five": "5", "fly": "5", "six": "6", "seven": "7",
-    "eight": "8", "ate": "8", "nine": "9",
+    "eight": "8", "ate": "8", "nine": "9", "arrow": "0",
 }
 
 PRIORITY_FOR_CATEGORY = {"safety": "critical", "maintenance": "high",
@@ -164,7 +164,7 @@ def detect_location(text):
     low = re.sub(r"(?<=\d)(?=[a-z])", " ", low)
     room = re.search(
         r"\broom(?:\s+(?:number|is|in|the))*\s+"
-        r"((?:(?:zero|oh|one|won|two|to|too|true|three|tree|four|for|five|fly|"
+        r"((?:(?:zero|oh|arrow|one|won|two|to|too|true|three|tree|trees|four|for|five|fly|"
         r"six|seven|eight|ate|nine)\s*){1,5})\b",
         low,
     )

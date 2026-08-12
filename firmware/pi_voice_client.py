@@ -257,9 +257,9 @@ def clean_transcript(transcript):
     digit_words = {
         "zero": "0", "oh": "0", "one": "1", "won": "1",
         "two": "2", "to": "2", "too": "2", "true": "2",
-        "three": "3", "tree": "3", "four": "4", "for": "4",
+        "three": "3", "tree": "3", "trees": "3", "four": "4", "for": "4",
         "five": "5", "fly": "5", "six": "6", "seven": "7",
-        "eight": "8", "ate": "8", "nine": "9",
+        "eight": "8", "ate": "8", "nine": "9", "arrow": "0",
     }
 
     def normalize_room(match):

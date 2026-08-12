@@ -116,6 +116,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r2["state"], "complete")
         self.assertEqual(r2["request"]["location"], "Room-205")
 
+    def test_vosk_tree_arrow_room_number_is_repaired(self):
+        r1 = turn("s-room-tree-arrow", 1, "the printer is broken")
+        self.assertEqual(r1["state"], "awaiting_user")
+        r2 = turn("s-room-tree-arrow", 2,
+                  "during to his room trees arrow seven")
+        self.assertEqual(r2["state"], "complete")
+        self.assertEqual(r2["request"]["location"], "Room-307")
+
     def test_service_first_does_not_use_panel_location(self):
         r = turn("s-service-first", 1, "the printer is broken",
                  location="3F-Washroom")
