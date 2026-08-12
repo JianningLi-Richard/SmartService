@@ -208,6 +208,26 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r2["state"], "rejected")
         self.assertIsNone(r2["request"])
 
+    def test_misheard_unlock_with_location_is_rejected(self):
+        r = turn("s-on-lock", 1,
+                 "police on lock the door in the second floor for me please")
+        self.assertEqual(r["state"], "rejected")
+        self.assertIsNone(r["request"])
+
+    def test_security_command_variants_are_rejected(self):
+        phrases = (
+            "please un lock the server door in room 205",
+            "open the door on the second floor",
+            "disable the alarm in the lobby",
+            "grant me access to the server room",
+            "bypass the security in room 307",
+        )
+        for index, phrase in enumerate(phrases):
+            with self.subTest(phrase=phrase):
+                r = turn("s-security-%s" % index, 1, phrase)
+                self.assertEqual(r["state"], "rejected")
+                self.assertIsNone(r["request"])
+
     # 8 Edge: rapid double press
     def test_double_press_creates_one_request(self):
         turn("s-8", 1, "the light in the lobby is broken")

@@ -99,6 +99,13 @@ STATUS_QUERY_HINTS = ["what happened", "status of", "my request", "did anyone",
                       "is it done", "any update", "how long", "still waiting"]
 OUT_OF_SCOPE_HINTS = ["unlock", "open the door", "disable", "turn off the alarm",
                       "override", "let me in", "give me access"]
+RESTRICTED_COMMAND_PATTERNS = [
+    r"\b(?:un\s*lock|on\s+lock)\s+(?:the\s+)?(?:server\s+)?door\b",
+    r"\bopen\s+(?:the\s+)?(?:server\s+)?door\b",
+    r"\b(?:disable|turn\s+off|silence)\s+(?:the\s+)?alarm\b",
+    r"\b(?:grant|give)\s+(?:me\s+)?access\b",
+    r"\b(?:override|bypass)\s+(?:the\s+)?(?:lock|security|alarm)\b",
+]
 
 LOCATION_PATTERNS = [
     (r"\broom\s+(\d+[a-z]?)\b", None),
@@ -189,10 +196,11 @@ def detect_category(text):
 
 def detect_intent(text):
     low = (text or "").lower()
+    if (any(h in low for h in OUT_OF_SCOPE_HINTS)
+            or any(re.search(pattern, low) for pattern in RESTRICTED_COMMAND_PATTERNS)):
+        return "out_of_scope"
     if any(h in low for h in STATUS_QUERY_HINTS):
         return "status_query"
-    if any(h in low for h in OUT_OF_SCOPE_HINTS):
-        return "out_of_scope"
     return "new_request"
 
 
