@@ -49,8 +49,15 @@ MODEL_PATH = os.getenv(
     "models/vosk-model-small-en-us-0.15",
 )
 
-PIPER_PATH = "tools/piper/piper"
-PIPER_MODEL = "models/piper/en_US-lessac-medium.onnx"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PIPER_PATH = os.getenv(
+    "SMARTSERVICE_PIPER_PATH",
+    os.path.join(PROJECT_ROOT, "tools", "piper", "piper"),
+)
+PIPER_MODEL = os.getenv(
+    "SMARTSERVICE_PIPER_MODEL",
+    os.path.join(PROJECT_ROOT, "models", "piper", "en_US-lessac-medium.onnx"),
+)
 PIPER_VOLUME = "1.5"
 
 try:
@@ -452,10 +459,15 @@ def speak_local(text):
             voice_engine = "Piper"
         elif os.path.isfile(PIPER_PATH) and os.path.isfile(PIPER_MODEL):
             print("Generating speech with Piper...")
+            piper_env = os.environ.copy()
+            piper_dir = os.path.dirname(PIPER_PATH)
+            existing_library_path = piper_env.get("LD_LIBRARY_PATH", "")
+            piper_env["LD_LIBRARY_PATH"] = (piper_dir + (":" + existing_library_path
+                                                          if existing_library_path else ""))
             subprocess.run(
                 [PIPER_PATH, "--model", PIPER_MODEL,
                  "--output_file", raw_audio_path],
-                input=text, text=True, check=True
+                input=text, text=True, check=True, env=piper_env
             )
             voice_engine = "Piper"
         elif shutil.which("espeak-ng"):
@@ -526,6 +538,7 @@ def send_request(transcript, confidence, session_id, turn):
         "stt_confidence": round(confidence, 2),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "prefer_local_tts": True,
+        "prefer_fast_routing": True,
     }
 
     print("Sending request:")

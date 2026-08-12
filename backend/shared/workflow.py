@@ -64,6 +64,7 @@ def validate_payload(body):
         "stt_confidence": conf,
         "timestamp": str(body["timestamp"]).strip(),
         "prefer_local_tts": bool(body.get("prefer_local_tts", False)),
+        "prefer_fast_routing": bool(body.get("prefer_fast_routing", False)),
     }
 
 
@@ -202,10 +203,14 @@ def handle_turn(body, device_key=None):
 
     # Step 4 -- agent (or rule-based fallback)
     agent_started = time.time()
-    cls = agent.classify(combined, p["location"], p["device_id"], prior_turns,
-                         p["stt_confidence"], kw_flag)
+    if p.get("prefer_fast_routing"):
+        cls = agent.classify_with_rules(combined, p["location"], prior_turns, kw_flag)
+    else:
+        cls = agent.classify(combined, p["location"], p["device_id"], prior_turns,
+                             p["stt_confidence"], kw_flag)
     telemetry["agent_ms"] = int((time.time() - agent_started) * 1000)
     telemetry["classifier"] = cls.get("source", "rules")
+    telemetry["fast_routing"] = bool(p.get("prefer_fast_routing"))
 
     # Step 2 continued -- layer 2 (agent's own flag) folded in
     agent_flag = bool((cls.get("request") or {}).get("safety_flag"))

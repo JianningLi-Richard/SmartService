@@ -39,6 +39,16 @@ def local_tts_turn(session, text):
     return body, telem
 
 
+def fast_pi_turn(session, text):
+    status, body, telem = workflow.handle_turn({
+        "session_id": session, "turn": 1, "device_id": "pi-3f-01",
+        "location": "3F-Washroom", "transcript": text,
+        "stt_confidence": 0.9, "timestamp": ts(2),
+        "prefer_local_tts": True, "prefer_fast_routing": True,
+    })
+    return body, telem
+
+
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
         store._store = store.MemoryStore()  # fresh state per test
@@ -133,6 +143,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["state"], "complete")
         self.assertEqual(r["audio_b64"], "")
         self.assertEqual(telemetry["tts_ms"], 0)
+
+    def test_pi_can_skip_foundry_for_a_fast_response(self):
+        r, telemetry = fast_pi_turn(
+            "s-fast-routing", "the printer in room 205 is broken")
+        self.assertEqual(r["state"], "complete")
+        self.assertEqual(r["request"]["location"], "Room-205")
+        self.assertEqual(telemetry["classifier"], "rules")
+        self.assertTrue(telemetry["fast_routing"])
 
     # 6 Safety (semantic)
     def test_safety_semantic_same_enforced_outcome(self):
