@@ -1,14 +1,18 @@
+# Redeploys infra/main.bicep whenever infra/ changes on main.
+# deploy.sh (not a raw `az deployment group create`) is what reads back
+# AI_FOUNDRY_AGENT_ID / device-keys / WEBSITE_RUN_FROM_PACKAGE from the live
+# app first -- without that, this workflow would silently wipe them on every run.
 name: Deploy infrastructure
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # lets you force a redeploy from the Actions tab without touching infra/
   push:
     branches: [main]
     paths:
-      - 'infra/**'
+      - 'infra/**' # only fires when infra actually changed -- backend/dashboard-only pushes skip this
 
 permissions:
-  id-token: write
+  id-token: write # required for OIDC login below; no client secret is ever stored
   contents: read
 
 env:
@@ -21,6 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Exchanges a short-lived GitHub-signed token for Azure access via the
+      # federated credential set up by infra/setup-federated-identity.sh.
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:

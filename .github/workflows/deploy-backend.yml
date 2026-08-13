@@ -1,3 +1,7 @@
+# Redeploys the Python Function App code whenever backend/ changes on main.
+# Points WEBSITE_RUN_FROM_PACKAGE at a storage blob SAS URL as a side effect --
+# a later deploy-infra.yml run resets that setting back to "1" unless deploy.sh
+# has already read the live value back (see infra/main.bicep's comment on it).
 name: Deploy backend (Azure Functions)
 
 on:
@@ -5,7 +9,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'backend/**'
+      - 'backend/**' # infra/dashboard-only pushes don't trigger a backend redeploy
 
 permissions:
   id-token: write
@@ -19,12 +23,16 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.12' # must match infra/main.bicep's linuxFxVersion: 'PYTHON|3.12'
 
+      # Vendors dependencies into the package instead of building them on the
+      # Function App itself (remote-build: false below) -- keeps the deploy fast
+      # and reproducible.
       - name: Install dependencies into the deployment package
         working-directory: backend
         run: pip install -r requirements.txt --target=".python_packages/lib/site-packages"
 
+      # Same OIDC pattern as deploy-infra.yml -- no Azure credential stored in GitHub.
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -32,6 +40,8 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # app-name comes from a repo *variable* (not a secret) set once after
+      # infra/deploy.sh first runs -- see infra/README.md.
       - name: Deploy to Azure Functions
         uses: Azure/functions-action@v1
         with:
