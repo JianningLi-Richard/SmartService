@@ -47,10 +47,16 @@ def _actor(req):
 # --------------------------------------------------------------------------
 # Device endpoint -- the only one the Pi calls
 # --------------------------------------------------------------------------
-@app.route(route="voice/turn", methods=["POST", "OPTIONS"])
+@app.route(route="voice/turn", methods=["POST", "OPTIONS", "GET"])
 def voice_turn(req: func.HttpRequest) -> func.HttpResponse:
     if req.method == "OPTIONS":
         return _json({})
+    if req.method == "GET":
+        # Visiting this URL in a browser sends GET; the device client always uses POST.
+        # A plain 404 here reads as "the app is down", which it repeatedly has not been.
+        return _json({"error": "method_not_allowed",
+                      "message": "voice/turn is a POST-only device endpoint; "
+                                 "GET https://.../api/health for a status check"}, 405)
 
     body = _body(req)
     if body is None:
